@@ -9,6 +9,8 @@ function msg(error) {
   if (/Invalid login credentials/i.test(t)) return 'E-mail ou senha incorretos.';
   if (/Email not confirmed/i.test(t)) return 'Confirme o seu e-mail pelo link recebido antes de entrar.';
   if (/User already registered/i.test(t)) return 'Este e-mail já tem conta. Use a aba Entrar.';
+  if (/itens_github_idx/i.test(t)) return 'Esta issue já está vinculada a outro item.';
+  if (/membros_github_idx/i.test(t)) return 'Este usuário do GitHub já está ligado a outra pessoa.';
   if (/row-level security/i.test(t)) return 'Seu perfil não permite esta ação.';
   if (/Password should be/i.test(t)) return 'A senha precisa ter pelo menos 10 caracteres.';
   const m = t.match(/^[A-Z_]+:\s*(.*)$/s);
@@ -62,7 +64,7 @@ export function criarBackendSupabase(url, chave) {
     },
 
     async carregar() {
-      const [inst, mem, itens, atr, dec, evt, anx] = await Promise.all([
+      const [inst, mem, itens, atr, dec, evt, anx, ghi] = await Promise.all([
         sb.from('instituicoes').select('*').order('ordem'),
         sb.from('membros').select('*').order('nome'),
         sb.from('itens').select('*').order('atualizado_em', { ascending: false }),
@@ -70,6 +72,7 @@ export function criarBackendSupabase(url, chave) {
         sb.from('decisoes').select('*').order('criado_em', { ascending: false }),
         sb.from('eventos').select('*').order('criado_em', { ascending: false }).limit(15),
         sb.from('anexos').select('item_id'),
+        sb.from('github_issues').select('*').order('atualizada_em', { ascending: false, nullsFirst: false }),
       ]);
       const anexosPorItem = {};
       // Se a migração de anexos ainda não foi rodada, a plataforma segue funcionando sem eles.
@@ -78,7 +81,19 @@ export function criarBackendSupabase(url, chave) {
         instituicoes: ok(inst), membros: ok(mem), itens: ok(itens),
         atribuicoes: ok(atr), decisoes: ok(dec), eventosRecentes: ok(evt),
         anexosPorItem, anexosAtivos: !anx.error,
+        // Se github.sql ainda não foi rodado, a integração fica escondida.
+        githubAtivo: !ghi.error,
+        githubIssues: ghi.error ? [] : ghi.data,
       };
+    },
+    async githubAdicionar(numero, origem, frente) {
+      return ok(await sb.rpc('github_adicionar', { p_numero: numero, p_origem: origem, p_frente: frente || null }));
+    },
+    async githubIgnorar(numero, ignorar) {
+      ok(await sb.rpc('github_ignorar', { p_numero: numero, p_ignorar: !!ignorar }));
+    },
+    async definirGithub(id, login) {
+      ok(await sb.rpc('definir_github', { p_membro: id, p_login: login || null }));
     },
     async comentarios(itemId) {
       return ok(await sb.from('comentarios').select('*').eq('item_id', itemId).order('criado_em'));

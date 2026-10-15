@@ -5,12 +5,17 @@ import {
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
   LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro,
-} from './util.js?v=20261015c';
+} from './util.js?v=20261015e';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
 const item = (S, id) => S.d.itens.find((i) => i.id === Number(id));
 const nomeDe = (S, id) => membro(S, id)?.nome || '—';
+// Autor de um evento do histórico: eventos sem autor vêm da sincronização com o GitHub
+const autorAv = (S, ev, extra = '') => (ev.autor_id ? avatar(membro(S, ev.autor_id), extra)
+  : `<span class="av gh ${extra}" title="GitHub" aria-hidden="true">${svg('issue', 15)}</span>`);
+const autorNome = (S, ev) => (ev.autor_id ? nomeDe(S, ev.autor_id) : 'GitHub');
+const GH_ESTADO = { aberta: ['Aberta', 'wait'], fechada: ['Fechada', 'ok'], descartada: ['Encerrada sem execução', 'cinza'] };
 const ativos = (S, inst) => S.d.membros.filter((m) => m.ativo && (!inst || m.instituicao_id === inst));
 const executores = (S, inst) => ativos(S, inst).filter((m) => m.perfil !== 'leitor');
 const souParceira = (S) => PARCEIRAS.includes(S.eu.instituicao_id);
@@ -41,6 +46,8 @@ function stPrazo(it, sempre = true) {
 const opcoes = (pares, sel) => pares.map(([v, t]) => `<option value="${e(v)}"${v === sel ? ' selected' : ''}>${e(t)}</option>`).join('');
 
 const ICONE = {
+  github: '<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor"></circle>',
+  issue: '<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor"></circle>',
   painel: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path>',
   quadro: '<rect x="3" y="4" width="5" height="16" rx="1.5"></rect><rect x="10" y="4" width="5" height="11" rx="1.5"></rect><rect x="17" y="4" width="4" height="7" rx="1.5"></rect>',
   triagem: '<path d="M3 13h5l2 3h4l2-3h5"></path><path d="M5 5h14l2 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"></path>',
@@ -79,6 +86,7 @@ export function moldura(S, rota, conteudo) {
     (a.para_instituicao === inst && a.situacao === 'aguardando') || (a.de_instituicao === inst && a.situacao === 'contraproposta')).length;
   const nPauta = S.d.decisoes.filter((d) => d.situacao === 'em_pauta').length;
   const nNotif = S.notif.filter((n) => !n.lida).length;
+  const nGithub = S.d.githubAtivo ? issuesParaAvaliar(S).length : 0;
   const ativa = rota === 'item' ? 'quadro' : rota;
   const nv = (r, t, n = 0, quente = false) => `<a class="nv${ativa === r ? ' on' : ''}" href="#/${r}"${ativa === r ? ' aria-current="page"' : ''}>${svg(r)}${t}${n ? `<span class="ct${quente ? ' hot' : ''}">${n}</span>` : ''}</a>`;
   return `<div class="app">
@@ -86,7 +94,7 @@ export function moldura(S, rota, conteudo) {
     <a class="brand" href="#/painel"><img src="${LOGO.MONITORAEA}" alt="MonitoraEA, página inicial"><span>Governança compartilhada</span></a>
     ${podeEditar(S.eu) ? `<a class="newbtn${rota === 'novo' ? ' on' : ''}" href="#/novo">${svg('mais', 16)}Novo registro</a>` : ''}
     <nav aria-label="Navegação principal">
-      ${nv('painel', 'Painel')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${nv('equipe', 'Equipe')}
+      ${nv('painel', 'Painel')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${S.d.githubAtivo ? nv('github', 'GitHub', nGithub) : ''}${nv('equipe', 'Equipe')}
     </nav>
     <div class="foot">
       <div class="me">${avatar(S.eu, 'eu')}<div>${e(S.eu.nome)}<small>${e(siglaDe(inst))}, ${e(PERFIL[S.eu.perfil].toLowerCase())}</small></div></div>
@@ -228,7 +236,7 @@ export function pagPainel(S) {
           <div class="legenda"><span><i style="background:var(--inpe)"></i>INPE</span><span><i style="background:var(--anppea)"></i>ANPPEA</span><span><i style="background:#C9D3DF"></i>Conjunta</span></div></div>`)}
         ${cartao('Atividade recente', `<div class="cb">${S.d.eventosRecentes.slice(0, 6).map((ev) => {
           const x = item(S, ev.item_id);
-          return `<div class="row top">${avatar(membro(S, ev.autor_id))}<div class="sm" style="min-width:0"><b style="font-weight:500">${e(nomeDe(S, ev.autor_id))}</b> ${e(/^[A-ZÀ-Ú][a-zà-ú]/.test(ev.detalhe) ? ev.detalhe.charAt(0).toLowerCase() + ev.detalhe.slice(1) : ev.detalhe)}${x ? ` em <a href="#/item/${x.id}">${e(x.titulo)}</a>` : ''}<div class="xs muted">${quando(ev.criado_em)}</div></div></div>`;
+          return `<div class="row top">${autorAv(S, ev)}<div class="sm" style="min-width:0"><b style="font-weight:500">${e(autorNome(S, ev))}</b> ${e(/^[A-ZÀ-Ú][a-zà-ú]/.test(ev.detalhe) ? ev.detalhe.charAt(0).toLowerCase() + ev.detalhe.slice(1) : ev.detalhe)}${x ? ` em <a href="#/item/${x.id}">${e(x.titulo)}</a>` : ''}<div class="xs muted">${quando(ev.criado_em)}</div></div></div>`;
         }).join('') || '<p class="vazio">Sem atividade ainda.</p>'}</div>`)}
       </div>
     </div>
@@ -242,7 +250,8 @@ export function pagQuadro(S) {
   base = base.filter((x) => x.fase !== 'publicado' || !x.concluido_em || diasAte(x.concluido_em.slice(0, 10)) >= -30);
   const q = (fil.q || '').trim().toLowerCase();
   if (q) {
-    base = base.filter((x) => [x.titulo, x.descricao, x.modulo, x.instrumento, nomeDe(S, x.responsavel_id)]
+    base = base.filter((x) => [x.titulo, x.descricao, x.modulo, x.instrumento, nomeDe(S, x.responsavel_id),
+      x.github_numero ? `#${x.github_numero}` : '', ...(x.github_etiquetas || []), ...(x.github_atribuidos || [])]
       .some((v) => String(v || '').toLowerCase().includes(q)));
   }
   const porOrigem = fil.origem === 'todas' ? base : base.filter((x) => x.origem === fil.origem);
@@ -259,6 +268,7 @@ export function pagQuadro(S) {
         ${x.responsavel_id ? avatar(membro(S, x.responsavel_id), 'p') : ''}
         ${x.prazo ? `<span class="${s ? s.cls : ''}">${s ? e(s.txt) : dataCurta(x.prazo)}</span>` : ''}
         ${nAnx[x.id] ? `<span class="clip" title="${nAnx[x.id]} anexos">${svg('clipe', 13)}${nAnx[x.id]}</span>` : ''}
+        ${x.github_numero ? `<span class="clip" title="Issue #${x.github_numero} no GitHub">${svg('issue', 12)}#${x.github_numero}</span>` : ''}
         <span class="vezp"><i style="background:${corInst(x.vez_instituicao)}"></i>${e(siglaDe(x.vez_instituicao))}</span>`
       : `<span>Publicado em ${dataCurta(x.concluido_em || x.atualizado_em)}</span>`}</div>
     </a>`;
@@ -524,7 +534,7 @@ export async function pagItem(S, id) {
           </form>
         </div>`, `<span class="muted sm">${coms.length}</span>`)}
 
-        ${cartao('Histórico', `<div class="cb">${evs.map((ev) => `<div class="row"><span class="xs muted" style="width:52px;flex:none">${dataCurta(ev.criado_em)}</span><div class="sm"><b style="font-weight:500">${e(nomeDe(S, ev.autor_id))}</b> · ${e(ev.detalhe)}</div></div>`).join('')}</div>`)}
+        ${cartao('Histórico', `<div class="cb">${evs.map((ev) => `<div class="row"><span class="xs muted" style="width:52px;flex:none">${dataCurta(ev.criado_em)}</span><div class="sm"><b style="font-weight:500">${e(autorNome(S, ev))}</b> · ${e(ev.detalhe)}</div></div>`).join('')}</div>`)}
       </div>
 
       <div class="lateral">
@@ -540,12 +550,100 @@ export async function pagItem(S, id) {
             <div class="f"><label for="aj-resp">Responsável</label><select id="aj-resp" name="responsavel"><option value="">A definir</option>${opcoes(ativos(S).filter((m) => PARCEIRAS.includes(m.instituicao_id) && m.perfil !== 'leitor').map((m) => [m.id, `${m.nome} (${siglaDe(m.instituicao_id)})`]), x.responsavel_id)}</select></div>
             <div class="f"><label for="aj-pz">Prazo</label><input id="aj-pz" name="prazo" type="date" value="${e(x.prazo || '')}"></div>
             <div class="f"><label for="aj-pr">Prioridade</label><select id="aj-pr" name="prioridade">${opcoes(Object.entries(PRIORIDADE), x.prioridade)}</select></div>
+            ${S.d.githubAtivo ? `<div class="f"><label for="aj-gh">Issue do GitHub (número)</label><input id="aj-gh" name="github_numero" type="number" min="1" step="1" inputmode="numeric" value="${e(x.github_numero || '')}" placeholder="Ex.: 42"><span class="hint">Deixe em branco para desfazer o vínculo.</span></div>` : ''}
             <div class="f"><span class="t">Instituições envolvidas</span><div style="display:flex;gap:6px;flex-wrap:wrap">${S.d.instituicoes.map((i) => `<label class="ck"><input type="checkbox" name="envolvidas" value="${e(i.id)}"${(x.envolvidas || []).includes(i.id) ? ' checked' : ''}>${e(i.sigla)}</label>`).join('')}</div></div>
             <button class="btn sm pri" type="submit">Salvar</button>
           </form></details>` : ''}`)}
+        ${x.github_numero ? cartao('GitHub', `<div class="cp ghbox">
+          <a class="ghnum" href="${e(linkSeguro(x.github_url) || '#')}" target="_blank" rel="noopener">${svg('issue', 16)}Issue #${x.github_numero}</a>
+          ${x.github_estado ? `<span class="st ${GH_ESTADO[x.github_estado][1]}">${e(GH_ESTADO[x.github_estado][0])}</span>` : '<span class="xs muted">Estado chega na próxima sincronização</span>'}
+          ${(x.github_etiquetas || []).length ? `<div class="ghetq">${x.github_etiquetas.map((t) => `<span class="tag ext">${e(t)}</span>`).join('')}</div>` : ''}
+          ${(x.github_atribuidos || []).length ? `<p class="sm">Com ${x.github_atribuidos.map((l) => `<b style="font-weight:500">@${e(l)}</b>`).join(', ')}</p>` : ''}
+          <p class="xs muted">${x.github_criado ? 'Item criado a partir da issue: título e descrição acompanham o GitHub.' : 'Item vinculado à issue.'}${x.github_sinc ? ` Sincronizado ${quando(x.github_sinc)}.` : ''}</p>
+        </div>`) : ''}
         ${atribs.length ? cartao('Atribuições', `<div class="cb">${atribs.map((a) => `<div class="row top" style="flex-direction:column;align-items:flex-start;gap:4px"><span style="display:inline-flex;gap:6px;align-items:center">${tag(a.de_instituicao)}→${tag(a.para_instituicao)}</span><span class="st ${({ aguardando: 'wait', aceita: 'ok', contraproposta: 'warn', devolvida: 'late' })[a.situacao]}">${e(SIT_ATRIB[a.situacao])}</span><span class="xs muted">${dataLonga(a.criado_em)}${a.resposta ? ` · ${e(a.resposta)}` : ''}</span></div>`).join('')}</div>`) : ''}
       </div>
     </div>
+  </main>`;
+}
+
+// ------------------------------------------------------------------ issues do GitHub
+const itemDaIssue = (S, n) => S.d.itens.find((x) => x.github_numero === n);
+function issuesParaAvaliar(S) {
+  return (S.d.githubIssues || []).filter((g) => g.estado === 'aberta' && !g.ignorada && !itemDaIssue(S, g.numero));
+}
+
+export function pagGithub(S) {
+  const todas = S.d.githubIssues || [];
+  const aba = S.filtros.github || 'avaliar';
+  const grupos = {
+    avaliar: issuesParaAvaliar(S),
+    quadro: todas.filter((g) => itemDaIssue(S, g.numero)),
+    ignoradas: todas.filter((g) => g.ignorada && !itemDaIssue(S, g.numero)),
+    fechadas: todas.filter((g) => g.estado !== 'aberta' && !g.ignorada && !itemDaIssue(S, g.numero)),
+  };
+  const rotulos = { avaliar: 'Para avaliar', quadro: 'No Quadro', ignoradas: 'Ignoradas', fechadas: 'Fechadas fora do Quadro' };
+  const vazio = {
+    avaliar: todas.length ? 'Nenhuma issue aberta esperando avaliação.' : 'Nenhuma issue chegou ainda. Depois de configurar a automação no repositório, rode “Run workflow” na aba Actions para trazer as issues que já existem.',
+    quadro: 'Nenhuma issue foi trazida para o Quadro ainda.',
+    ignoradas: 'Nenhuma issue ignorada.',
+    fechadas: 'Nenhuma issue fechada fora do Quadro.',
+  };
+  const editor = podeEditar(S.eu);
+  const inst = S.eu.instituicao_id;
+  const origens = ehAdmin(S.eu) ? ['INPE', 'ANPPEA', 'CONJUNTA'] : [PARCEIRAS.includes(inst) ? inst : null, 'CONJUNTA'].filter(Boolean);
+  const semIssue = S.d.itens.filter((x) => aberto(x) && !x.github_numero);
+
+  const linha = (g) => {
+    const it = itemDaIssue(S, g.numero);
+    const resumo = g.corpo ? (g.corpo.length > 220 ? g.corpo.slice(0, 217) + '…' : g.corpo) : '';
+    const est = GH_ESTADO[g.estado];
+    let acoes = '';
+    if (it) {
+      acoes = `<a class="btn sm" href="#/item/${it.id}">Abrir no Quadro</a><span class="xs muted">${e(FASE[it.fase])}</span>`;
+    } else if (editor && g.ignorada) {
+      acoes = `<button type="button" class="btn sm" data-acao="gh-ignorar" data-numero="${g.numero}" data-valor="0">Voltar para avaliação</button>`;
+    } else if (editor) {
+      acoes = `<details class="gh-d"><summary class="btn sm pri">Trazer para o Quadro</summary>
+          <form class="form gh-f" data-form="gh-adicionar" data-numero="${g.numero}">
+            <div class="f"><span class="t">Origem</span><div style="display:flex;gap:6px;flex-wrap:wrap">${origens.map((o, i) => `<label class="ck"><input type="radio" name="origem" value="${o}"${i === 0 ? ' checked' : ''}>${o === 'CONJUNTA' ? 'Conjunta' : e(siglaDe(o))}</label>`).join('')}</div></div>
+            <div class="f"><label for="gh-fr-${g.numero}">Frente</label><select id="gh-fr-${g.numero}" name="frente">${opcoes(Object.entries(FRENTE), g.frente_sugerida || 'desenvolvimento')}</select></div>
+            <button class="btn sm pri" type="submit">Adicionar ao Quadro</button>
+          </form></details>
+        ${semIssue.length ? `<details class="gh-d"><summary class="btn sm">Vincular a um item</summary>
+          <form class="form gh-f" data-form="gh-vincular" data-numero="${g.numero}">
+            <div class="f"><label for="gh-it-${g.numero}">Item que esta issue acompanha</label><select id="gh-it-${g.numero}" name="item" required>${opcoes(semIssue.map((x) => [x.id, x.titulo]))}</select></div>
+            <button class="btn sm pri" type="submit">Vincular</button>
+          </form></details>` : ''}
+        ${g.estado === 'aberta' ? `<button type="button" class="lnk" data-acao="gh-ignorar" data-numero="${g.numero}" data-valor="1">Ignorar</button>` : ''}`;
+    }
+    return `<article class="ghl">
+      <div class="ghl-t">
+        <a class="ghl-n" href="${e(linkSeguro(g.url) || '#')}" target="_blank" rel="noopener" title="Abrir no GitHub">${svg('issue', 15)}#${g.numero}</a>
+        <div style="min-width:0;flex:1">
+          <h3>${e(g.titulo)}</h3>
+          <div class="ghl-m">
+            <span class="st ${est[1]}">${e(est[0])}</span>
+            ${(g.etiquetas || []).map((t) => `<span class="tag ext">${e(t)}</span>`).join('')}
+            ${(g.atribuidos || []).length ? `<span class="xs">Com ${g.atribuidos.map((l) => `@${e(l)}`).join(', ')}</span>` : ''}
+            <span class="xs muted">${g.autor ? `Aberta por @${e(g.autor)} · ` : ''}${g.atualizada_em ? `atualizada ${quando(g.atualizada_em)}` : ''}</span>
+          </div>
+          ${resumo ? `<p class="sm muted ghl-r">${e(resumo)}</p>` : ''}
+        </div>
+      </div>
+      ${acoes ? `<div class="ghl-a">${acoes}</div>` : ''}
+    </article>`;
+  };
+
+  return `<main class="page">
+    ${cab({
+      titulo: 'Issues do GitHub',
+      sub: 'As issues do repositório de desenvolvimento chegam aqui. Escolha quais entram no Quadro; a partir daí o item acompanha a issue: quem está atribuído, fechamento, reabertura e comentários.',
+    })}
+    <div class="tabs" role="tablist" aria-label="Situação das issues">${Object.entries(rotulos).map(([k, t]) =>
+      `<button type="button" role="tab" class="${aba === k ? 'on' : ''}" aria-selected="${aba === k}" data-acao="filtro" data-chave="github" data-valor="${k}">${e(t)}<b>${grupos[k].length}</b></button>`).join('')}</div>
+    <section class="card" style="gap:0" aria-label="${e(rotulos[aba])}">${grupos[aba].map(linha).join('') || `<p class="vazio">${vazio[aba]}</p>`}</section>
+    ${editor ? '' : '<p class="sm muted">Seu perfil é de leitura: você acompanha as issues, mas quem escolhe o que entra no Quadro são colaboradores e coordenação.</p>'}
   </main>`;
 }
 
@@ -695,7 +793,7 @@ export async function pagEquipe(S) {
       <tbody>${ms.map(({ m, c }) => {
         const gerir = coordenaDe(S.eu, m.instituicao_id) && m.id !== S.eu.id;
         return `<tr${m.ativo ? '' : ' style="opacity:.55"'}>
-          <td><div class="pessoa">${avatar(m)}<div><div style="font-weight:500">${e(m.nome)}</div><div class="xs muted">${e(m.papel || '')}${m.ativo ? '' : ' · inativo'}</div></div></div></td>
+          <td><div class="pessoa">${avatar(m)}<div><div style="font-weight:500">${e(m.nome)}</div><div class="xs muted">${e(m.papel || '')}${m.github ? ` · @${e(m.github)}` : ''}${m.ativo ? '' : ' · inativo'}</div></div></div></td>
           <td>${tag(PARCEIRAS.includes(m.instituicao_id) ? m.instituicao_id : 'ext', siglaDe(m.instituicao_id))}</td>
           <td>${gerir ? `<form data-form="perfil" data-id="${e(m.id)}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><label class="oculto" for="pf-${e(m.id)}">Perfil de ${e(m.nome)}</label><select id="pf-${e(m.id)}" name="perfil" style="min-height:34px;width:auto">${opcoes(Object.entries(PERFIL).filter(([k]) => k !== 'administracao' || ehAdmin(S.eu)), m.perfil)}</select><button class="btn sm" type="submit">Salvar</button><button class="lnk${m.ativo ? ' perigo' : ''}" type="button" data-acao="ativo" data-id="${e(m.id)}" data-valor="${m.ativo ? '0' : '1'}">${m.ativo ? 'Desativar' : 'Reativar'}</button></form>` : `<span class="sm">${e(PERFIL[m.perfil])}</span>`}</td>
           <td class="n${c.resp ? '' : ' z'}">${c.resp}</td><td class="n${c.vez ? '' : ' z'}">${c.vez}</td><td class="n${c.atr ? ' r' : ' z'}">${c.atr}</td><td class="n${c.fim ? '' : ' z'}">${c.fim}</td>
@@ -719,6 +817,16 @@ export async function pagEquipe(S) {
         ${cartao('Convites pendentes', `<div class="cb">${convites.filter((c) => !c.aceito_em).map((c) => `<div class="row"><div style="min-width:0"><b style="font-weight:500">${e(c.email)}</b><div class="xs muted">${e(siglaDe(c.instituicao_id))}, ${e(PERFIL[c.perfil].toLowerCase())} · <span style="font-family:ui-monospace,monospace">${e(c.codigo)}</span></div></div></div>`).join('') || '<p class="vazio">Nenhum convite pendente.</p>'}</div>`)}
       </div>
     </div>` : ''}
+
+    ${S.d.githubAtivo ? (() => {
+      const quem = ativos(S).filter((m) => m.id === S.eu.id || coordenaDe(S.eu, m.instituicao_id));
+      return cartao('Usuários do GitHub', `<form class="form cp" data-form="github">
+        <p class="sm muted">Quando uma issue que está no Quadro é atribuída a alguém no GitHub, a plataforma reconhece a pessoa por este usuário e a torna responsável pelo item.</p>
+        <div class="g2"><div class="f"><label for="gh-m">Pessoa</label><select id="gh-m" name="membro">${opcoes(quem.map((m) => [m.id, `${m.id === S.eu.id ? `${m.nome} (você)` : m.nome}${m.github ? ` · @${m.github}` : ""}`]), S.eu.id)}</select></div>
+        <div class="f"><label for="gh-l">Usuário no GitHub</label><input id="gh-l" name="login" type="text" autocomplete="off" spellcheck="false" placeholder="ex.: maria-silva" value="${e(S.eu.github || membro(S, S.eu.id)?.github || '')}"></div></div>
+        <div><button class="btn sm pri" type="submit">Salvar</button></div>
+      </form>`);
+    })() : ''}
 
     <p class="sm muted"><b style="color:var(--ink);font-weight:600">Perfis de acesso.</b> Leitores veem tudo e comentam. Colaboradores criam, anexam, atribuem e passam a vez. A coordenação faz a triagem, convida pessoas e pactua decisões. A administração gerencia perfis nas duas instituições.</p>
   </main>`;
@@ -795,6 +903,11 @@ export const acoes = {
   async 'reiniciar-demo'(S) { S.api.reiniciarDemo(); return { recarregar: true, aviso: 'Exemplos restaurados.' }; },
   async sair(S) { await S.api.sair(); S.eu = null; S.pend = {}; location.hash = '#/acesso'; return {}; },
   async 'aba-acesso'(S, el) { S.abaAcesso = el.dataset.aba; return {}; },
+  async 'gh-ignorar'(S, el) {
+    const ignorar = el.dataset.valor === '1';
+    await S.api.githubIgnorar(Number(el.dataset.numero), ignorar);
+    return { recarregar: true, aviso: ignorar ? `Issue #${el.dataset.numero} ignorada.` : `Issue #${el.dataset.numero} voltou para avaliação.` };
+  },
   async filtro(S, el) { S.filtros[el.dataset.chave] = el.dataset.valor; return {}; },
   async 'limpar-busca'(S) { S.filtros.q = ''; return {}; },
   async fase(S, el) {
@@ -922,10 +1035,17 @@ export const formularios = {
     return { recarregar: true, aviso: 'A vez foi passada e a pessoa foi avisada.' };
   },
   async ajustar(S, fd, form) {
-    await S.api.atualizarItem(Number(form.dataset.id), {
+    const id = Number(form.dataset.id);
+    const patch = {
       responsavel_id: txt(fd, 'responsavel') || null, prazo: txt(fd, 'prazo') || null,
       prioridade: txt(fd, 'prioridade'), envolvidas: fd.getAll('envolvidas'),
-    });
+    };
+    if (fd.has('github_numero')) {
+      const n = txt(fd, 'github_numero') ? Number(txt(fd, 'github_numero')) : null;
+      if (n !== null && !(Number.isInteger(n) && n > 0)) throw new Error('Informe só o número da issue, por exemplo 42.');
+      if (n !== (item(S, id)?.github_numero || null)) patch.github_numero = n;
+    }
+    await S.api.atualizarItem(id, patch);
     return { recarregar: true, aviso: 'Detalhes salvos.' };
   },
   async comentar(S, fd, form) {
@@ -955,6 +1075,22 @@ export const formularios = {
       perfil: txt(fd, 'perfil'), papel: txt(fd, 'papel') || null,
     });
     return { recarregar: true, aviso: 'Convite gerado.' };
+  },
+  async 'gh-adicionar'(S, fd, form) {
+    const n = Number(form.dataset.numero);
+    const id = await S.api.githubAdicionar(n, txt(fd, 'origem'), txt(fd, 'frente') || null);
+    location.hash = `#/item/${id}`;
+    return { recarregar: true, aviso: `Issue #${n} adicionada ao Quadro.` };
+  },
+  async 'gh-vincular'(S, fd, form) {
+    const n = Number(form.dataset.numero);
+    const id = Number(txt(fd, 'item'));
+    await S.api.atualizarItem(id, { github_numero: n });
+    return { recarregar: true, aviso: `Issue #${n} vinculada a “${item(S, id)?.titulo || 'item'}”.` };
+  },
+  async github(S, fd) {
+    await S.api.definirGithub(txt(fd, 'membro'), txt(fd, 'login'));
+    return { recarregar: true, aviso: txt(fd, 'login') ? 'Usuário do GitHub salvo.' : 'Usuário do GitHub removido.' };
   },
   async perfil(S, fd, form) {
     await S.api.atualizarMembro(form.dataset.id, { perfil: txt(fd, 'perfil') });

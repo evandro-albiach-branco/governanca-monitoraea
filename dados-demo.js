@@ -1,12 +1,22 @@
 // Modo demonstração: mesmos fluxos e regras do banco real, com dados de
 // exemplo guardados apenas neste navegador (localStorage).
-import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe } from './util.js?v=20261015c';
+import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe } from './util.js?v=20261015e';
 
-const CHAVE = 'gov-monitoraea-demo-v1';
+const CHAVE = 'gov-monitoraea-demo-v3';
+const REPO_DEMO = 'ladis-inpe/monitoraea';
 const CHAVE_EU = 'gov-monitoraea-demo-eu';
 
 function agoraMenos(dias, horas = 0) {
   return new Date(Date.now() - dias * 86400000 - horas * 3600000).toISOString();
+}
+
+// Mesma regra do banco: etiqueta com o nome de uma frente define a frente
+function frenteDe(etiquetas) {
+  for (const t of etiquetas || []) {
+    const n = t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/^frente\s*[:/-]\s*/, '').trim();
+    if (['desenvolvimento', 'operacao', 'dados', 'comunidades', 'formacao', 'infraestrutura', 'gestao'].includes(n)) return n;
+  }
+  return null;
 }
 
 function semente() {
@@ -27,11 +37,14 @@ function semente() {
   ].map(([id, nome, inst, perfil, papel]) => ({
     id, nome, instituicao_id: inst, perfil, papel, ativo: true,
     email: `${id}@demo.local`, criado_em: agoraMenos(90),
+    github: ({ m1: 'evandro-albiach-branco', m5: 'equipe-dev-monitoraea' })[id] || null,
   }));
 
   const I = (o) => ({
     descricao: '', modulo: '', envolvidas: [], prioridade: 'media', vez_nota: null, instrumento: null,
-    concluido_em: null, ...o, criado_em: agoraMenos(o.idade ?? 10), atualizado_em: agoraMenos(o.mexido ?? 1),
+    concluido_em: null, github_repo: null, github_numero: null, github_url: null, github_estado: null,
+    github_etiquetas: [], github_atribuidos: [], github_criado: false, github_sinc: null,
+    ...o, criado_em: agoraMenos(o.idade ?? 10), atualizado_em: agoraMenos(o.mexido ?? 1),
   });
   const itens = [
     I({ id: 1, tipo: 'demanda', titulo: 'Filtro por bioma na perspectiva Iniciativas', descricao: 'Permitir filtrar as iniciativas por bioma nos mapas e gráficos da perspectiva Iniciativas.', frente: 'desenvolvimento', modulo: 'Portal · Sínteses', origem: 'ANPPEA', fase: 'triagem', responsavel_id: null, vez_instituicao: 'INPE', vez_membro_id: null, vez_nota: 'Aguardando triagem', prazo: d(21), criado_por: 'm7', idade: 1, mexido: 0.5 }),
@@ -39,17 +52,18 @@ function semente() {
     I({ id: 3, tipo: 'demanda', titulo: 'Validação dos dados de enraizamento pelas redes estaduais', descricao: 'Os dados de relacionamento DEA↔SEMAs e INPE↔CIEAs precisam ser conferidos pelas redes antes de entrar na Síntese Enraizamento.', frente: 'dados', modulo: 'Enraizamento', origem: 'INPE', fase: 'triagem', responsavel_id: null, vez_instituicao: 'ANPPEA', vez_membro_id: null, vez_nota: 'Aguardando triagem', prazo: d(26), criado_por: 'm4', idade: 1 }),
     I({ id: 4, tipo: 'atividade', titulo: 'Recalcular o IITEA com os cadastros de 2026', frente: 'dados', modulo: 'IITEA', origem: 'INPE', fase: 'priorizado', responsavel_id: 'm1', vez_instituicao: 'INPE', vez_membro_id: 'm1', prazo: d(45), criado_por: 'm1', idade: 12 }),
     I({ id: 5, tipo: 'atividade', titulo: 'Tutorial de autoavaliação para iniciativas', frente: 'formacao', modulo: 'Autoavaliação', origem: 'CONJUNTA', envolvidas: ['INPE', 'ANPPEA'], fase: 'priorizado', responsavel_id: 'm4', vez_instituicao: 'ANPPEA', vez_membro_id: 'm8', vez_nota: 'Roteiro do tutorial', prazo: d(30), criado_por: 'm4', idade: 9 }),
-    I({ id: 6, tipo: 'atividade', titulo: 'Síntese Enraizamento no Portal', descricao: 'Camadas nacional, painel de controle e dossiê do estado.', frente: 'desenvolvimento', modulo: 'Portal · Sínteses', origem: 'INPE', fase: 'andamento', prioridade: 'alta', responsavel_id: 'm5', vez_instituicao: 'INPE', vez_membro_id: 'm5', prazo: d(2), criado_por: 'm1', idade: 30 }),
-    I({ id: 7, tipo: 'atividade', titulo: 'Atualização do servidor de mapas', frente: 'infraestrutura', modulo: 'Infraestrutura', origem: 'INPE', fase: 'andamento', responsavel_id: 'm5', vez_instituicao: 'INPE', vez_membro_id: 'm5', prazo: d(23), criado_por: 'm5', idade: 8 }),
+    I({ id: 6, tipo: 'atividade', titulo: 'Síntese Enraizamento no Portal', descricao: 'Camadas nacional, painel de controle e dossiê do estado.', frente: 'desenvolvimento', modulo: 'Portal · Sínteses', origem: 'INPE', fase: 'andamento', prioridade: 'alta', responsavel_id: 'm5', vez_instituicao: 'INPE', vez_membro_id: 'm5', prazo: d(2), criado_por: 'm1', idade: 30, github_repo: REPO_DEMO, github_numero: 87, github_url: `https://github.com/${REPO_DEMO}/issues/87`, github_estado: 'aberta', github_etiquetas: ['desenvolvimento', 'sínteses'], github_atribuidos: ['equipe-dev-monitoraea'], github_criado: false, github_sinc: agoraMenos(0.2) }),
+    I({ id: 7, tipo: 'atividade', titulo: 'Atualização do servidor de mapas', frente: 'infraestrutura', modulo: 'Infraestrutura', origem: 'INPE', fase: 'andamento', responsavel_id: 'm5', vez_instituicao: 'INPE', vez_membro_id: 'm5', prazo: d(23), criado_por: 'm5', idade: 8, github_repo: REPO_DEMO, github_numero: 91, github_url: `https://github.com/${REPO_DEMO}/issues/91`, github_estado: 'aberta', github_etiquetas: ['infraestrutura'], github_atribuidos: ['equipe-dev-monitoraea'], github_criado: true, github_sinc: agoraMenos(0.1) }),
     I({ id: 8, tipo: 'atividade', titulo: 'Mobilização das redes para o cadastro de iniciativas', frente: 'comunidades', modulo: 'Cadastro', origem: 'ANPPEA', fase: 'andamento', responsavel_id: 'm8', vez_instituicao: 'ANPPEA', vez_membro_id: 'm8', prazo: d(40), criado_por: 'm6', idade: 20 }),
     I({ id: 9, tipo: 'atividade', titulo: 'Formulário de mapeamento de iniciativas, versão 2', frente: 'desenvolvimento', modulo: 'Cadastro', origem: 'INPE', envolvidas: ['ANPPEA'], fase: 'validacao', responsavel_id: 'm5', vez_instituicao: 'ANPPEA', vez_membro_id: 'm8', vez_nota: 'Homologar com as redes', prazo: d(16), criado_por: 'm1', idade: 40 }),
     I({ id: 10, tipo: 'atividade', titulo: 'Painel de conjuntura das CIEAs', frente: 'desenvolvimento', modulo: 'CIEAs', origem: 'CONJUNTA', envolvidas: ['INPE', 'ANPPEA'], fase: 'validacao', responsavel_id: 'm3', vez_instituicao: 'ANPPEA', vez_membro_id: 'm6', prazo: d(21), criado_por: 'm3', idade: 25 }),
     I({ id: 11, tipo: 'processo', titulo: 'Política de dados abertos do portal', descricao: 'Definir quais dados do MonitoraEA ficam abertos para download e em que nível de agregação.', frente: 'operacao', modulo: 'Portal', origem: 'CONJUNTA', envolvidas: ['INPE', 'ANPPEA'], fase: 'decisao', responsavel_id: 'm1', vez_instituicao: 'INPE', vez_membro_id: 'm1', vez_nota: 'Levar ao Comitê', prazo: d(-3), criado_por: 'm1', idade: 35, mexido: 12 }),
-    I({ id: 12, tipo: 'atividade', titulo: 'Distribuição de iniciativas por perspectiva no portal', frente: 'desenvolvimento', modulo: 'Portal · Sínteses', origem: 'INPE', fase: 'publicado', responsavel_id: 'm5', vez_instituicao: 'INPE', vez_membro_id: 'm5', prazo: d(-8), criado_por: 'm1', idade: 40, concluido_em: agoraMenos(6) }),
+    I({ id: 12, tipo: 'atividade', titulo: 'Distribuição de iniciativas por perspectiva no portal', frente: 'desenvolvimento', modulo: 'Portal · Sínteses', origem: 'INPE', fase: 'publicado', responsavel_id: 'm5', vez_instituicao: 'INPE', vez_membro_id: 'm5', prazo: d(-8), criado_por: 'm1', idade: 40, concluido_em: agoraMenos(6), github_repo: REPO_DEMO, github_numero: 74, github_url: `https://github.com/${REPO_DEMO}/issues/74`, github_estado: 'fechada', github_etiquetas: ['desenvolvimento'], github_atribuidos: ['equipe-dev-monitoraea'], github_criado: true, github_sinc: agoraMenos(6) }),
     I({ id: 13, tipo: 'atividade', titulo: 'Chamada nacional para cadastro de iniciativas', frente: 'comunidades', modulo: 'Cadastro', origem: 'ANPPEA', fase: 'publicado', responsavel_id: 'm9', vez_instituicao: 'ANPPEA', vez_membro_id: 'm9', prazo: d(-14), criado_por: 'm6', idade: 30, concluido_em: agoraMenos(13) }),
     I({ id: 14, tipo: 'processo', titulo: '3º Termo Aditivo ao TED nº 967812/2024', descricao: 'Acomodar o projeto de desenvolvimento institucional das CIEAs no OE1.', frente: 'gestao', modulo: 'Financiamento', origem: 'INPE', envolvidas: ['DEA_MMA', 'ANPPEA'], fase: 'andamento', responsavel_id: 'm1', vez_instituicao: 'INPE', vez_membro_id: 'm1', vez_nota: 'Revisar o plano de trabalho', prazo: d(9), instrumento: 'Processo MMA 02000.008293/2024-84', criado_por: 'm1', idade: 43 }),
     I({ id: 15, tipo: 'processo', titulo: 'Plano de trabalho conjunto 2027', frente: 'gestao', modulo: 'Planejamento', origem: 'ANPPEA', envolvidas: ['INPE'], fase: 'andamento', responsavel_id: 'm6', vez_instituicao: 'INPE', vez_membro_id: 'm1', vez_nota: 'Validar a proposta', prazo: d(16), criado_por: 'm6', idade: 15 }),
     I({ id: 16, tipo: 'demanda', titulo: 'Ajuste no formulário de mapeamento de iniciativas', frente: 'desenvolvimento', modulo: 'Cadastro', origem: 'ANPPEA', fase: 'triagem', responsavel_id: null, vez_instituicao: 'ANPPEA', vez_membro_id: null, vez_nota: 'Avaliar contraproposta de INPE', prazo: d(28), criado_por: 'm7', idade: 6 }),
+    I({ id: 18, tipo: 'atividade', titulo: 'Erro ao exportar CSV do painel de iniciativas', descricao: 'Arquivo exportado vem com acentos quebrados quando aberto no Excel.', frente: 'operacao', modulo: 'Portal', origem: 'INPE', envolvidas: ['INPE'], fase: 'priorizado', responsavel_id: null, vez_instituicao: 'INPE', vez_membro_id: null, criado_por: 'm1', idade: 0.3, mexido: 0.3, github_repo: REPO_DEMO, github_numero: 95, github_url: `https://github.com/${REPO_DEMO}/issues/95`, github_estado: 'aberta', github_etiquetas: ['bug', 'operação'], github_atribuidos: [], github_criado: true, github_sinc: agoraMenos(0.3) }),
     I({ id: 17, tipo: 'demanda', titulo: 'Contatos atualizados das 27 CIEAs', frente: 'comunidades', modulo: 'CIEAs', origem: 'INPE', fase: 'priorizado', responsavel_id: null, vez_instituicao: 'INPE', vez_membro_id: 'm4', vez_nota: 'Devolvida por ANPPEA', prazo: d(26), criado_por: 'm4', idade: 7 }),
   ];
 
@@ -84,6 +98,10 @@ function semente() {
   eventos.push({ id: eid++, item_id: 9, autor_id: 'm5', tipo: 'fase', detalhe: 'Em andamento → Em validação', criado_em: agoraMenos(2) });
   eventos.push({ id: eid++, item_id: 6, autor_id: 'm5', tipo: 'fase', detalhe: 'Priorizado → Em andamento', criado_em: agoraMenos(6) });
   eventos.push({ id: eid++, item_id: 17, autor_id: 'm6', tipo: 'triagem', detalhe: 'ANPPEA devolveu: A lista já está no painel das CIEAs', criado_em: agoraMenos(4) });
+  eventos.push({ id: eid++, item_id: 18, autor_id: null, tipo: 'github', detalhe: 'Criado a partir da issue #95 do GitHub (aberta por @evandro-albiach-branco)', criado_em: agoraMenos(0.3) });
+  eventos.push({ id: eid++, item_id: 7, autor_id: null, tipo: 'github', detalhe: 'Criado a partir da issue #91 do GitHub', criado_em: agoraMenos(8) });
+  eventos.push({ id: eid++, item_id: 6, autor_id: 'm5', tipo: 'github', detalhe: '@equipe-dev-monitoraea comentou no GitHub: Camada nacional pronta; falta o dossiê do estado.', criado_em: agoraMenos(0.5) });
+  eventos.push({ id: eid++, item_id: 12, autor_id: 'm5', tipo: 'github', detalhe: 'Issue #74 fechada no GitHub por @equipe-dev-monitoraea', criado_em: agoraMenos(6) });
   eventos.push({ id: eid++, item_id: 16, autor_id: 'm2', tipo: 'triagem', detalhe: 'INPE fez uma contraproposta', criado_em: agoraMenos(3) });
 
   const notificacoes = [
@@ -104,7 +122,23 @@ function semente() {
   const anexos = [
     { id: 1, item_id: 10, comentario_id: null, tipo: 'link', nome: 'Painel de conjuntura das CIEAs (versão publicada)', url: 'https://evandro-albiach-branco.github.io/conjuntura-ciea/', caminho: null, mime: null, tamanho: null, duracao_s: null, criado_por: 'm3', criado_em: agoraMenos(5) },
   ];
-  return { instituicoes, membros, itens, atribuicoes, comentarios, decisoes, eventos, notificacoes, anexos, convites: [], seq: 100 };
+  const G = (numero, titulo, estado, etiquetas, atribuidos, autor, dias, corpo = '', extra = {}) => ({
+    repo: REPO_DEMO, numero, titulo, corpo, estado, etiquetas, atribuidos, autor,
+    url: `https://github.com/${REPO_DEMO}/issues/${numero}`, frente_sugerida: frenteDe(etiquetas),
+    criada_em: agoraMenos(dias + 3), atualizada_em: agoraMenos(dias), sinc: agoraMenos(dias), ignorada: false, ignorada_por: null, ...extra,
+  });
+  const github_issues = [
+    G(98, 'Lentidão ao abrir o mapa de iniciativas no celular', 'aberta', ['bug', 'operação'], [], 'celly-ks', 0.1, 'No celular, o mapa leva mais de 20 segundos para carregar com todas as camadas ligadas.'),
+    G(97, 'Exportar a Síntese Enraizamento em PDF', 'aberta', ['desenvolvimento', 'sínteses'], ['equipe-dev-monitoraea'], 'evandro-albiach-branco', 0.4, 'Gerar um PDF do dossiê do estado para levar às reuniões das CIEAs.'),
+    G(96, 'Atualizar dependências do front-end', 'aberta', ['infraestrutura'], ['equipe-dev-monitoraea'], 'equipe-dev-monitoraea', 1, 'Rotina trimestral de atualização de bibliotecas.'),
+    G(95, 'Erro ao exportar CSV do painel de iniciativas', 'aberta', ['bug', 'operação'], [], 'evandro-albiach-branco', 0.3, 'Arquivo exportado vem com acentos quebrados quando aberto no Excel.'),
+    G(94, 'Teste de deploy', 'aberta', [], [], 'equipe-dev-monitoraea', 2, '', { ignorada: true, ignorada_por: 'm5' }),
+    G(91, 'Atualização do servidor de mapas', 'aberta', ['infraestrutura'], ['equipe-dev-monitoraea'], 'equipe-dev-monitoraea', 0.1),
+    G(87, 'Síntese Enraizamento: camadas e dossiê', 'aberta', ['desenvolvimento', 'sínteses'], ['equipe-dev-monitoraea'], 'evandro-albiach-branco', 0.2),
+    G(80, 'Ajustar cores do semáforo', 'fechada', ['desenvolvimento'], ['equipe-dev-monitoraea'], 'equipe-dev-monitoraea', 9),
+    G(74, 'Distribuição de iniciativas por perspectiva no portal', 'fechada', ['desenvolvimento'], ['equipe-dev-monitoraea'], 'evandro-albiach-branco', 6),
+  ];
+  return { instituicoes, membros, itens, atribuicoes, comentarios, decisoes, eventos, notificacoes, anexos, github_issues, convites: [], seq: 100 };
 }
 
 export function criarBackendDemo() {
@@ -112,6 +146,7 @@ export function criarBackendDemo() {
   try { db = JSON.parse(localStorage.getItem(CHAVE)); } catch { db = null; }
   if (!db || !db.itens) db = semente();
   if (!db.anexos) db.anexos = [];
+  if (!db.github_issues) db.github_issues = [];
   // Arquivos do modo demonstração ficam só na memória desta aba.
   const blobs = new Map();
   const salvar = () => { try { localStorage.setItem(CHAVE, JSON.stringify(db)); } catch { /* navegador sem armazenamento */ } };
@@ -146,6 +181,23 @@ export function criarBackendDemo() {
   function aplicarItem(it, patch, silencio = false) {
     const antes = { ...it };
     if (perfil() !== 'administracao') { delete patch.origem; delete patch.criado_por; }
+    if ('github_numero' in patch && (patch.github_numero || null) !== (it.github_numero || null)) {
+      const n = patch.github_numero || null;
+      if (n !== null && (!Number.isInteger(n) || n <= 0)) falha('Número de issue inválido.');
+      if (n !== null && db.itens.some((x) => x !== it && x.github_numero === n)) falha('Esta issue já está vinculada a outro item.');
+      Object.assign(patch, n === null
+        ? { github_repo: null, github_url: null }
+        : { github_repo: REPO_DEMO, github_url: `https://github.com/${REPO_DEMO}/issues/${n}` },
+      { github_numero: n, github_estado: null, github_etiquetas: [], github_atribuidos: [], github_criado: false, github_sinc: null });
+      const gi = n === null ? null : db.github_issues.find((g) => g.numero === n);
+      if (gi) {
+        Object.assign(patch, { github_url: gi.url, github_estado: gi.estado, github_etiquetas: [...gi.etiquetas], github_atribuidos: [...gi.atribuidos], github_sinc: gi.sinc });
+        gi.ignorada = false; gi.ignorada_por = null;
+      }
+      evento(it.id, 'github', n === null ? `Desfez o vínculo com a issue #${antes.github_numero}` : `Vinculou à issue #${n} do GitHub`);
+    } else {
+      delete patch.github_numero;
+    }
     Object.assign(it, patch, { atualizado_em: agora() });
     if (it.fase === 'publicado' && antes.fase !== 'publicado') it.concluido_em = agora();
     if (!['publicado', 'arquivado'].includes(it.fase)) it.concluido_em = null;
@@ -226,7 +278,8 @@ export function criarBackendDemo() {
         decisoes: [...db.decisoes].sort((a, b) => b.criado_em.localeCompare(a.criado_em)),
         eventosRecentes: [...db.eventos].sort((a, b) => b.criado_em.localeCompare(a.criado_em)).slice(0, 15),
         anexosPorItem: db.anexos.reduce((m, a) => { m[a.item_id] = (m[a.item_id] || 0) + 1; return m; }, {}),
-        anexosAtivos: true,
+        anexosAtivos: true, githubAtivo: true,
+        githubIssues: [...db.github_issues].sort((a, b) => b.atualizada_em.localeCompare(a.atualizada_em)),
       });
     },
     async comentarios(itemId) { return copia(db.comentarios.filter((c) => c.item_id === itemId)); },
@@ -400,6 +453,51 @@ export function criarBackendDemo() {
       if (p) m.perfil = p;
       if (papel) m.papel = papel;
       if (ativo !== null) m.ativo = ativo;
+      salvar();
+    },
+    async githubAdicionar(numero, origem, frente) {
+      if (!podeEditar()) falha('Seu perfil não permite criar itens.');
+      if (!(origem === inst() || origem === 'CONJUNTA' || perfil() === 'administracao')) falha('A origem precisa ser a sua instituição ou conjunta.');
+      const gi = db.github_issues.find((g) => g.numero === numero);
+      if (!gi) falha(`A issue #${numero} ainda não chegou à plataforma.`);
+      if (db.itens.some((x) => x.github_numero === numero)) falha('Esta issue já está no Quadro.');
+      const resp = gi.atribuidos.map((l) => db.membros.find((m) => m.ativo && m.perfil !== 'leitor' && (m.github || '').toLowerCase() === l.toLowerCase())).find(Boolean);
+      const vezInst = origem === 'CONJUNTA' ? (PARCEIRAS.includes(inst()) ? inst() : 'INPE') : origem;
+      const it = {
+        id: novoId(), tipo: 'atividade', titulo: gi.titulo, descricao: gi.corpo || '', frente: frente || gi.frente_sugerida || 'desenvolvimento',
+        modulo: '', origem, envolvidas: origem === 'CONJUNTA' ? ['INPE', 'ANPPEA'] : [origem],
+        fase: gi.estado === 'aberta' ? (resp ? 'andamento' : 'priorizado') : gi.estado === 'fechada' ? 'publicado' : 'arquivado',
+        prioridade: 'media', responsavel_id: resp?.id || null, vez_instituicao: resp?.instituicao_id || vezInst, vez_membro_id: resp?.id || null,
+        vez_nota: null, prazo: null, instrumento: null, criado_por: euId, criado_em: agora(), atualizado_em: agora(),
+        concluido_em: gi.estado === 'fechada' ? agora() : null,
+        github_repo: gi.repo, github_numero: gi.numero, github_url: gi.url, github_estado: gi.estado,
+        github_etiquetas: [...gi.etiquetas], github_atribuidos: [...gi.atribuidos], github_criado: true, github_sinc: gi.sinc,
+      };
+      db.itens.push(it);
+      evento(it.id, 'criado', 'Registrou o item');
+      evento(it.id, 'github', `Trouxe a issue #${gi.numero} do GitHub${gi.autor ? ` (aberta por @${gi.autor})` : ''}`);
+      if (resp) notificar([resp.id], it.id, 'vez', 'A próxima ação é sua: ' + it.titulo);
+      gi.ignorada = false; gi.ignorada_por = null;
+      salvar();
+      return it.id;
+    },
+    async githubIgnorar(numero, ignorar) {
+      if (!podeEditar()) falha('Seu perfil não permite esta ação.');
+      const gi = db.github_issues.find((g) => g.numero === numero);
+      if (!gi) falha('Issue inexistente.');
+      gi.ignorada = !!ignorar; gi.ignorada_por = ignorar ? euId : null;
+      salvar();
+    },
+    async definirGithub(id, login) {
+      const m = membro(id);
+      if (!m) falha('Membro inexistente.');
+      if (!(id === euId || coordDe(m.instituicao_id))) falha('Só a própria pessoa ou a coordenação altera este dado.');
+      let v = String(login || '').trim().replace(/^https?:\/\/github\.com\//i, '').replace(/^@/, '').replace(/\/+$/, '');
+      if (v && !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(v)) falha('Usuário do GitHub inválido.');
+      if (v && db.membros.some((x) => x.id !== id && (x.github || '').toLowerCase() === v.toLowerCase())) {
+        falha('Este usuário do GitHub já está ligado a outra pessoa.');
+      }
+      m.github = v || null;
       salvar();
     },
     async notificacoes() {

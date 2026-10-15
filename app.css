@@ -330,3 +330,20 @@ textarea { padding: 10px 12px; resize: vertical; }
   .fases { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .nums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* GitHub */
+.av.gh { background: #EEF2F6; color: #24292F; }
+.ghbox { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.ghnum { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--navy); }
+.ghetq { display: flex; flex-wrap: wrap; gap: 6px; }
+.ghl { display: flex; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; padding: 18px 20px; border-top: 1px solid var(--line); }
+.ghl:first-child { border-top: 0; }
+.ghl-t { display: flex; gap: 14px; min-width: 0; flex: 1 1 420px; }
+.ghl-n { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--navy); white-space: nowrap; height: 24px; }
+.ghl h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.ghl-m { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-top: 6px; }
+.ghl-r { margin-top: 8px; max-width: 70ch; }
+.ghl-a { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-start; flex: 0 1 auto; }
+.gh-d[open] { flex-basis: 100%; }
+.gh-f { margin-top: 12px; background: var(--soft); padding: 14px; border-radius: 12px; max-width: 420px; }
+@media (max-width: 900px) { .ghl-t { flex-basis: 100%; } }

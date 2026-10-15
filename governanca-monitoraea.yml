@@ -1,0 +1,114 @@
+# Governança MonitoraEA · sincronização das issues
+#
+# Este arquivo vai no REPOSITÓRIO DAS ISSUES (não no da plataforma), no
+# caminho:  .github/workflows/governanca-monitoraea.yml
+#
+# Ele precisa de três segredos (Settings → Secrets and variables → Actions):
+#   GOVERNANCA_URL      endereço do projeto no Supabase (https://xxxx.supabase.co)
+#   GOVERNANCA_CHAVE    a chave publishable do Supabase (sb_publishable_...)
+#   GOVERNANCA_SEGREDO  o mesmo segredo usado em github_configurar no Supabase
+#
+# As issues chegam à página GitHub da plataforma ("caixa de entrada"). Só
+# viram itens do Quadro as que alguém da equipe escolher; a partir daí, o
+# item acompanha a issue.
+#
+# Quando roda:
+#   - sempre que uma issue é aberta, editada, fechada, reaberta, atribuída
+#     ou ganha/perde etiqueta, e quando alguém comenta numa issue;
+#   - todo dia de manhã, revisando as issues alteradas nos últimos 2 dias;
+#   - manualmente (aba Actions → Governança MonitoraEA → Run workflow),
+#     para trazer todas as issues para a caixa de entrada de uma vez.
+
+name: Governança MonitoraEA
+
+on:
+  issues:
+    types: [opened, edited, closed, reopened, assigned, unassigned, labeled, unlabeled]
+  issue_comment:
+    types: [created]
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+    inputs:
+      tudo:
+        description: 'Enviar todas as issues (desmarque para só as alteradas nos últimos 2 dias)'
+        type: boolean
+        default: true
+
+permissions:
+  issues: read
+
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    if: ${{ !(github.event_name == 'issue_comment' && github.event.issue.pull_request) }}
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          GOV_URL: ${{ secrets.GOVERNANCA_URL }}
+          GOV_CHAVE: ${{ secrets.GOVERNANCA_CHAVE }}
+          GOV_SEGREDO: ${{ secrets.GOVERNANCA_SEGREDO }}
+        with:
+          script: |
+            const base = (process.env.GOV_URL || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1$/, '');
+            const chave = (process.env.GOV_CHAVE || '').trim();
+            const segredo = process.env.GOV_SEGREDO || '';
+            if (!base || !chave || !segredo) {
+              core.setFailed('Faltam os segredos GOVERNANCA_URL, GOVERNANCA_CHAVE ou GOVERNANCA_SEGREDO neste repositório.');
+              return;
+            }
+            const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+            async function enviar(issue, acao, ator = null, comentario = null) {
+              let ultimo = '';
+              for (let tentativa = 1; tentativa <= 3; tentativa++) {
+                const r = await fetch(`${base}/rest/v1/rpc/github_sincronizar`, {
+                  method: 'POST',
+                  headers: { apikey: chave, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    p_segredo: segredo, p_issue: issue, p_acao: acao,
+                    p_ator: ator, p_comentario: comentario,
+                  }),
+                });
+                const texto = await r.text();
+                if (r.ok) return texto ? JSON.parse(texto) : null;
+                ultimo = `${r.status} ${texto}`;
+                if (r.status < 500 && !/duplicate key|could not serialize|deadlock/i.test(texto)) break;
+                await espera(1500 * tentativa);
+              }
+              throw new Error(`Issue #${issue.number}: ${ultimo}`);
+            }
+
+            const ev = context.eventName;
+            const p = context.payload;
+
+            if (ev === 'issues') {
+              const r = await enviar(p.issue, p.action, p.sender?.login || null);
+              core.info(`#${p.issue.number} (${p.action}): ${JSON.stringify(r)}`);
+              return;
+            }
+            if (ev === 'issue_comment') {
+              const r = await enviar(p.issue, 'commented', p.sender?.login || null, p.comment?.body || '');
+              core.info(`#${p.issue.number} (comentário): ${JSON.stringify(r)}`);
+              return;
+            }
+
+            // Importação manual (todas) ou revisão diária (últimos 2 dias)
+            const tudo = ev === 'workflow_dispatch' && String(p.inputs?.tudo) !== 'false';
+            const params = { ...context.repo, state: 'all', per_page: 100, sort: 'updated', direction: 'desc' };
+            if (!tudo) params.since = new Date(Date.now() - 2 * 864e5).toISOString();
+            const issues = (await github.paginate(github.rest.issues.listForRepo, params)).filter((i) => !i.pull_request);
+            let caixa = 0, itens = 0;
+            const falhas = [];
+            for (const i of issues) {
+              try {
+                const r = await enviar(i, 'importar');
+                if (r?.item) itens++; else if (r?.caixa) caixa++;
+              } catch (err) {
+                falhas.push(err.message);
+              }
+            }
+            const resumo = `${issues.length} issues enviadas: ${itens} atualizaram itens do Quadro e ${caixa} estão na caixa de entrada da plataforma.`;
+            core.info(resumo);
+            await core.summary.addHeading('Governança MonitoraEA').addRaw(resumo).write();
+            if (falhas.length) core.setFailed(`${falhas.length} falharam:\n${falhas.slice(0, 20).join('\n')}`);

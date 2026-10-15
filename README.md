@@ -13,6 +13,7 @@ Plataforma de governança compartilhada do desenvolvimento e da operação do si
 Se a plataforma já está no ar, com contas e dados, **não rode o `schema.sql` de novo** (ele apaga tudo). Para esta versão:
 
 1. No SQL Editor do Supabase, rode **`anexos.sql`**. Ele só acrescenta a tabela de anexos, o espaço de arquivos (bucket `anexos`) e as regras de acesso; não apaga nada e pode ser rodado mais de uma vez.
+   Para a integração com o GitHub, rode também **`github.sql`** (também só acrescenta) e siga a seção 7.
 2. No GitHub, envie os arquivos novos por cima dos antigos (*Add file → Upload files*, selecionando todos de uma vez). **Não substitua o `config.js`**, que já tem as suas chaves.
 3. Recarregue o site com Ctrl + Shift + R.
 
@@ -112,6 +113,8 @@ logo-*.png             logos do MonitoraEA, INPE e ANPPEA
 schema.sql             instalação completa: tabelas, regras, gatilhos, funções e anexos (APAGA os dados)
 primeiro-convite.sql   convite da primeira pessoa administradora
 anexos.sql             acrescenta anexos a uma instalação existente (não apaga nada)
+github.sql             acrescenta a integração com as issues do GitHub (não apaga nada)
+governanca-monitoraea.yml  automação que vai no repositório das issues (seção 7)
 00-limpar.sql          remove a plataforma do banco (apaga os dados)
 ```
 
@@ -135,3 +138,60 @@ Isso apaga todos os dados. Depois, se quiser, remova as contas em *Authenticatio
 ## 6. Incorporação futura ao MonitoraEA
 
 O banco é PostgreSQL, como o do MonitoraEA. Para incorporar a plataforma, basta migrar estas tabelas para o banco do sistema e trocar o login pelo do portal. As regras de negócio (triagem, vez, decisões) já estão no banco e podem ser reaproveitadas.
+
+
+## 7. Integração com as issues do GitHub
+
+As issues de um repositório de desenvolvimento chegam à página **GitHub** da plataforma, que funciona como caixa de entrada. **Nada entra no Quadro sozinho.** Colaboradores e coordenação decidem o que fazer com cada issue:
+
+- **Trazer para o Quadro:** cria um item a partir da issue. A pessoa escolhe a origem (a sua instituição ou conjunta) e a frente. A frente vem sugerida pelas etiquetas.
+- **Vincular a um item:** liga a issue a um item que já existe. O vínculo também pode ser feito na ficha do item, em *Editar detalhes*.
+- **Ignorar:** tira a issue da lista *Para avaliar*. Ela pode voltar depois, pela aba *Ignoradas*.
+
+Depois que a issue está no Quadro, o item a acompanha:
+- quem está **atribuído** na issue e tem o usuário do GitHub cadastrado na Equipe vira responsável, e o item passa para Em andamento;
+- **fechar** a issue leva o item para Publicado; fechar como *not planned* leva para Arquivado;
+- **reabrir** a issue devolve o item para Em andamento;
+- os **comentários** da issue entram no histórico do item.
+
+O GitHub não passa por cima da governança:
+- itens em triagem entre instituições não mudam de fase;
+- nos itens apenas vinculados, título e descrição continuam os da plataforma.
+
+Os leitores veem a página, mas não escolhem issues.
+
+### Passo a passo (uma vez só)
+
+1. **Supabase → SQL Editor:** rode `github.sql`. Ele só acrescenta, não apaga nada.
+2. **Supabase → SQL Editor:** rode a configuração, trocando o repositório, o segredo e o e-mail:
+
+   ```sql
+   select github_configurar(
+     'dono/repositorio-das-issues',        -- ex.: ladis-inpe/monitoraea
+     'UM-SEGREDO-LONGO-COM-PELO-MENOS-24-CARACTERES',
+     'seu-email@inpe.br',                   -- membro responsável pela integração
+     'INPE'                                 -- origem padrão: INPE, ANPPEA ou CONJUNTA
+   );
+   ```
+
+   Para que outras etiquetas sugiram uma frente, acrescente a lista de correspondências:
+
+   ```sql
+   select github_configurar('dono/repo', 'SEGREDO...', 'seu-email@inpe.br', 'INPE',
+     '{"frontend":"desenvolvimento","bug":"operacao","servidor":"infraestrutura"}');
+   ```
+
+3. **GitHub, no repositório das issues → Settings → Secrets and variables → Actions → New repository secret.** Crie três segredos:
+   - `GOVERNANCA_URL`: o endereço do projeto no Supabase (o mesmo do `config.js`);
+   - `GOVERNANCA_CHAVE`: a chave publishable (a mesma do `config.js`);
+   - `GOVERNANCA_SEGREDO`: exatamente o mesmo segredo do passo 2.
+4. **GitHub, no repositório das issues → Add file → Create new file.** No nome, escreva `.github/workflows/governanca-monitoraea.yml`, cole o conteúdo do arquivo `governanca-monitoraea.yml` e clique em *Commit changes*.
+5. **Aba Actions → Governança MonitoraEA → Run workflow.** Isso envia de uma vez as issues que já existem para a caixa de entrada. Depois disso, cada mudança numa issue chega em segundos, e uma revisão diária corrige o que tiver escapado.
+6. Na plataforma, em **Equipe → Usuários do GitHub**, cada pessoa informa o próprio usuário. A coordenação também pode informar o usuário das pessoas da sua instituição.
+
+### Se algo não chegar
+
+- Na aba **Actions** do repositório das issues, abra a execução com X vermelho. A mensagem diz o motivo:
+  - `segredo inválido`: o segredo do GitHub e o do passo 2 estão diferentes;
+  - `não é o configurado`: o repositório informado no passo 2 está errado.
+- O segredo não fica no site. Se precisar trocá-lo, rode o passo 2 de novo com o novo segredo e atualize `GOVERNANCA_SEGREDO` no GitHub.
