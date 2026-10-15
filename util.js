@@ -132,3 +132,32 @@ export function podeEditarItem(m, it) {
     || it.vez_instituicao === m.instituicao_id || (it.envolvidas || []).includes(m.instituicao_id);
 }
 export const outraParceira = (inst) => (inst === 'INPE' ? 'ANPPEA' : 'INPE');
+
+// ---- anexos ----
+export const LIMITE_MB = 50;
+export function tamanhoFmt(b) {
+  if (b == null) return '';
+  if (b < 1024) return `${b} B`;
+  if (b < 1048576) return `${Math.round(b / 1024)} KB`;
+  return `${(b / 1048576).toFixed(1).replace('.', ',')} MB`;
+}
+export function duracaoFmt(s) {
+  if (s == null) return '';
+  const m = Math.floor(s / 60);
+  return `${m}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+}
+export function tipoDeMime(mime = '') {
+  if (mime.startsWith('image/')) return 'imagem';
+  if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
+  return 'arquivo';
+}
+export function extensao(nome) {
+  const m = /\.([a-z0-9]{1,5})$/i.exec(nome || '');
+  return m ? m[1].toUpperCase() : 'ARQ';
+}
+export function youtubeId(url) {
+  const m = String(url || '').match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+export const linkSeguro = (url) => /^https?:\/\//i.test(String(url || ''));

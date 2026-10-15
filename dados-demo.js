@@ -101,13 +101,19 @@ function semente() {
     { id: 'CNPQ', sigla: 'CNPq', nome: 'Conselho Nacional de Desenvolvimento Científico e Tecnológico', parceira: false, ordem: 4 },
   ];
 
-  return { instituicoes, membros, itens, atribuicoes, comentarios, decisoes, eventos, notificacoes, convites: [], seq: 100 };
+  const anexos = [
+    { id: 1, item_id: 10, comentario_id: null, tipo: 'link', nome: 'Painel de conjuntura das CIEAs (versão publicada)', url: 'https://evandro-albiach-branco.github.io/conjuntura-ciea/', caminho: null, mime: null, tamanho: null, duracao_s: null, criado_por: 'm3', criado_em: agoraMenos(5) },
+  ];
+  return { instituicoes, membros, itens, atribuicoes, comentarios, decisoes, eventos, notificacoes, anexos, convites: [], seq: 100 };
 }
 
 export function criarBackendDemo() {
   let db;
   try { db = JSON.parse(localStorage.getItem(CHAVE)); } catch { db = null; }
   if (!db || !db.itens) db = semente();
+  if (!db.anexos) db.anexos = [];
+  // Arquivos do modo demonstração ficam só na memória desta aba.
+  const blobs = new Map();
   const salvar = () => { try { localStorage.setItem(CHAVE, JSON.stringify(db)); } catch { /* navegador sem armazenamento */ } };
   salvar();
 
@@ -219,6 +225,8 @@ export function criarBackendDemo() {
         atribuicoes: [...db.atribuicoes].sort((a, b) => b.criado_em.localeCompare(a.criado_em)),
         decisoes: [...db.decisoes].sort((a, b) => b.criado_em.localeCompare(a.criado_em)),
         eventosRecentes: [...db.eventos].sort((a, b) => b.criado_em.localeCompare(a.criado_em)).slice(0, 15),
+        anexosPorItem: db.anexos.reduce((m, a) => { m[a.item_id] = (m[a.item_id] || 0) + 1; return m; }, {}),
+        anexosAtivos: true,
       });
     },
     async comentarios(itemId) { return copia(db.comentarios.filter((c) => c.item_id === itemId)); },
@@ -300,11 +308,49 @@ export function criarBackendDemo() {
     async comentar(itemId, texto, proposta) {
       if (!eu()) falha('Entre para comentar.');
       const it = db.itens.find((x) => x.id === itemId);
-      db.comentarios.push({ id: novoId(), item_id: itemId, autor_id: euId, texto, proposta_decisao: !!proposta, criado_em: agora() });
+      const c = { id: novoId(), item_id: itemId, autor_id: euId, texto, proposta_decisao: !!proposta, criado_em: agora() };
+      db.comentarios.push(c);
       let alvo = [it.responsavel_id, it.criado_por, it.vez_membro_id];
       if (/@INPE\b/i.test(texto)) alvo = alvo.concat(membrosDe('INPE'));
       if (/@ANPPEA\b/i.test(texto)) alvo = alvo.concat(membrosDe('ANPPEA'));
       notificar(alvo, itemId, proposta ? 'proposta' : 'comentario', `${eu().nome} comentou em ${it.titulo}`);
+      salvar();
+      return copia(c);
+    },
+    async anexos(itemId) {
+      return copia(db.anexos.filter((a) => a.item_id === itemId))
+        .map((a) => ({ ...a, endereco: a.tipo === 'link' ? a.url : (blobs.get(a.id) || null) }));
+    },
+    async anexar(itemId, { arquivo = null, nome, tipo, mime = null, duracao = null, url = null, comentarioId = null }) {
+      const it = db.itens.find((x) => x.id === itemId);
+      if (!it) falha('Item não encontrado.');
+      if (comentarioId) {
+        const c = db.comentarios.find((x) => x.id === comentarioId);
+        if (!c || c.autor_id !== euId) falha('Só é possível anexar ao seu próprio comentário.');
+      } else if (!podeEditar()) {
+        falha('Seu perfil não permite anexar arquivos ao item.');
+      }
+      if (tipo === 'link' && !/^https?:\/\//i.test(url || '')) falha('Use um endereço que comece com http:// ou https://.');
+      const a = {
+        id: novoId(), item_id: itemId, comentario_id: comentarioId, tipo, nome, url: tipo === 'link' ? url : null,
+        caminho: tipo === 'link' ? null : `demo/${itemId}/${nome}`, mime, tamanho: arquivo ? arquivo.size : null,
+        duracao_s: duracao, criado_por: euId, criado_em: agora(),
+      };
+      db.anexos.push(a);
+      if (arquivo) blobs.set(a.id, URL.createObjectURL(arquivo));
+      if (!comentarioId) {
+        evento(itemId, 'anexo', 'Anexou ' + nome);
+        notificar([it.responsavel_id, it.criado_por, it.vez_membro_id], itemId, 'anexo', `${eu().nome} anexou ${nome} em ${it.titulo}`);
+      }
+      salvar();
+    },
+    async removerAnexo(a) {
+      const i = db.anexos.findIndex((x) => x.id === a.id);
+      if (i < 0) return;
+      if (db.anexos[i].criado_por !== euId && perfil() !== 'administracao') falha('Só quem enviou pode remover este anexo.');
+      db.anexos.splice(i, 1);
+      const u = blobs.get(a.id);
+      if (u) { URL.revokeObjectURL(u); blobs.delete(a.id); }
       salvar();
     },
     async proporDecisao(d) {

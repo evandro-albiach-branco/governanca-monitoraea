@@ -8,9 +8,18 @@ Plataforma de governança compartilhada do desenvolvimento e da operação do si
 
 ---
 
+## 0. Atualizar uma instalação que já está funcionando
+
+Se a plataforma já está no ar, com contas e dados, **não rode o `schema.sql` de novo** (ele apaga tudo). Para esta versão:
+
+1. No SQL Editor do Supabase, rode **`anexos.sql`**. Ele só acrescenta a tabela de anexos, o espaço de arquivos (bucket `anexos`) e as regras de acesso; não apaga nada e pode ser rodado mais de uma vez.
+2. No GitHub, envie os arquivos novos por cima dos antigos (*Add file → Upload files*, selecionando todos de uma vez). **Não substitua o `config.js`**, que já tem as suas chaves.
+3. Recarregue o site com Ctrl + Shift + R.
+
+
 ## 1. Publicar no GitHub Pages (5 minutos)
 
-1. Crie um repositório no GitHub (por exemplo `governanca-monitoraea`) e envie todos os arquivos desta pasta, mantendo a estrutura.
+1. Crie um repositório no GitHub (por exemplo `governanca-monitoraea`) e envie todos os arquivos desta pasta para a raiz do repositório (em *Add file → Upload files*, selecione todos de uma vez).
 2. No repositório, abra **Settings → Pages**.
 3. Em *Build and deployment*, escolha **Deploy from a branch**, branch `main`, pasta `/ (root)` e salve.
 4. Em um ou dois minutos, o site estará em `https://SEU-USUARIO.github.io/governanca-monitoraea/`.
@@ -23,13 +32,14 @@ Nesse ponto ele já funciona em **modo demonstração**. Na tela de acesso, esco
 ## 2. Ligar o banco de dados (10 minutos)
 
 1. Crie uma conta e um projeto em [supabase.com](https://supabase.com). Escolha a região mais próxima do Brasil e anote a senha do banco.
-2. No painel do projeto, abra **SQL Editor → New query**, cole todo o conteúdo de `supabase/schema.sql` e clique em **Run**.
+2. No painel do projeto, abra **SQL Editor → New query**, cole todo o conteúdo de `schema.sql` e clique em **Run**.
+   O script começa removendo qualquer instalação anterior, então pode ser rodado de novo se algo der errado. Mas ele **apaga os dados**: use-o só para instalar. Se você já tinha criado contas em *Authentication → Users*, apague-as antes de reinstalar.
 3. Em **Authentication → Sign In / Providers → Email**:
    - deixe *Email* habilitado;
    - **desligue "Confirm email"**. O código de convite já comprova que a pessoa recebeu o e-mail. Se preferir manter a confirmação, configure um servidor de e-mail próprio, conforme o item 3 da seção 4.
 4. Em **Authentication → URL Configuration**, coloque o endereço do GitHub Pages em *Site URL*.
-5. Abra `supabase/primeiro-convite.sql`, troque o e-mail pelo seu, cole no SQL Editor e rode. Isso cria o convite da primeira pessoa administradora, com o código `INPE-0001`.
-6. Em **Project Settings → API**, copie a *Project URL* e a chave *anon public*. Cole as duas em `assets/js/config.js`:
+5. Abra `primeiro-convite.sql`, troque o e-mail pelo seu, cole no SQL Editor e rode. Isso cria o convite da primeira pessoa administradora, com o código `INPE-0001`.
+6. Em **Project Settings → API**, copie a *Project URL* e a chave *anon public*. Cole as duas em `config.js`:
 
    ```js
    export const SUPABASE_URL = 'https://xxxxxxxx.supabase.co';
@@ -67,6 +77,12 @@ Todos veem tudo. O perfil define o que cada um pode fazer, e essas regras valem 
 
 **Decisões.** Qualquer colaborador pode colocar uma decisão em pauta, inclusive marcando um comentário como proposta. A decisão só fica *pactuada* quando as coordenações do INPE e da ANPPEA dão o seu de acordo.
 
+**Anexos.** Cada item tem uma área de anexos, e cada comentário pode levar anexos também.
+- **Arquivos** de qualquer tipo, até 50 MB cada (limite do plano gratuito do Supabase). Imagens aparecem em miniatura; vídeos e áudios tocam na própria página; documentos ficam para baixar.
+- **Gravação de áudio** direto no navegador, para mensagens de voz em comentários ou registros no item (até 10 minutos por gravação).
+- **Links de vídeo ou página**: YouTube aparece com o vídeo embutido; Drive e outros sites viram um cartão com o link. Para vídeos longos, prefira o link, porque o espaço gratuito é de 1 GB no total.
+- Os arquivos ficam num espaço privado: só membros com login conseguem abri-los, por links temporários. Colaboradores anexam nos itens; qualquer membro, inclusive leitor, anexa nos próprios comentários. Cada pessoa remove o que enviou; a administração remove qualquer anexo.
+
 **Notificações.** Ficam no sino do topo e se atualizam em tempo real. São geradas pelo banco quando há atribuição, resposta de triagem, passagem de vez, item pronto para validação, comentário em item seu e menção `@INPE` ou `@ANPPEA`.
 
 **Histórico.** Toda mudança de fase, vez, responsável e prazo fica registrada com autor e data. Nada é apagado: o que perde validade é arquivado.
@@ -76,22 +92,27 @@ Todos veem tudo. O perfil define o que cada um pode fazer, e essas regras valem 
 1. **Pausa do plano gratuito do Supabase.** Um projeto gratuito é pausado depois de 7 dias de pouca atividade. Ele pode ser retomado pelo painel (*Resume project*) sem perda de dados. Com uso diário isso não acontece. Para uso institucional contínuo, considere o plano pago.
 2. **Cópias de segurança.** Exporte o banco periodicamente: *Database → Backups* nos planos pagos, ou `pg_dump` com a string de conexão.
 3. **E-mails.** A versão atual avisa dentro da plataforma. Para enviar convites e avisos também por e-mail, configure um servidor de e-mail próprio em *Authentication → Emails → SMTP Settings* (institucional ou de um serviço de envio). O envio de avisos por e-mail é um próximo passo de desenvolvimento.
-4. **LGPD.** A plataforma guarda nome, e-mail e instituição dos colaboradores. O termo aceito no primeiro acesso deve explicar essa finalidade.
+4. **Espaço de arquivos.** O plano gratuito do Supabase inclui 1 GB de arquivos e 5 GB de transferência por mês. Acompanhe em *Storage* no painel. Com uso intenso de vídeo, considere o plano pago ou use links do YouTube/Drive.
+5. **LGPD.** A plataforma guarda nome, e-mail e instituição dos colaboradores. O termo aceito no primeiro acesso deve explicar essa finalidade.
 
 ## 5. Estrutura dos arquivos
 
+Todos os arquivos ficam na raiz do repositório, sem pastas:
+
 ```
-index.html                  página única da aplicação
-assets/css/app.css          estilo (padrão visual do MonitoraEA)
-assets/js/config.js         endereço e chave pública do Supabase
-assets/js/app.js            inicialização, rotas e ações
-assets/js/paginas.js        telas: acesso, painel, quadro, triagem, item, novo registro, decisões, equipe, notificações
-assets/js/dados-supabase.js conexão com o banco
-assets/js/dados-demo.js     modo demonstração (mesmas regras, dados no navegador)
-assets/js/util.js           rótulos, datas e permissões
-assets/img/                 logos do MonitoraEA, INPE e ANPPEA
-supabase/schema.sql         tabelas, regras de acesso, gatilhos e funções
-supabase/primeiro-convite.sql convite da primeira pessoa administradora
+index.html             página única da aplicação
+app.css                estilo (padrão visual do MonitoraEA)
+config.js              endereço e chave pública do Supabase
+app.js                 inicialização, rotas e ações
+paginas.js             telas: acesso, painel, quadro, triagem, item, novo registro, decisões, equipe, notificações
+dados-supabase.js      conexão com o banco
+dados-demo.js          modo demonstração (mesmas regras, dados no navegador)
+util.js                rótulos, datas e permissões
+logo-*.png             logos do MonitoraEA, INPE e ANPPEA
+schema.sql             instalação completa: tabelas, regras, gatilhos, funções e anexos (APAGA os dados)
+primeiro-convite.sql   convite da primeira pessoa administradora
+anexos.sql             acrescenta anexos a uma instalação existente (não apaga nada)
+00-limpar.sql          remove a plataforma do banco (apaga os dados)
 ```
 
 **Testar no próprio computador:** na pasta do projeto, rode `python3 -m http.server 8000` e abra `http://localhost:8000`. Abrir o `index.html` direto pelo navegador não funciona, porque os módulos JavaScript precisam de um servidor.

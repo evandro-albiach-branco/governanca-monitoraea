@@ -62,17 +62,22 @@ export function criarBackendSupabase(url, chave) {
     },
 
     async carregar() {
-      const [inst, mem, itens, atr, dec, evt] = await Promise.all([
+      const [inst, mem, itens, atr, dec, evt, anx] = await Promise.all([
         sb.from('instituicoes').select('*').order('ordem'),
         sb.from('membros').select('*').order('nome'),
         sb.from('itens').select('*').order('atualizado_em', { ascending: false }),
         sb.from('atribuicoes').select('*').order('criado_em', { ascending: false }),
         sb.from('decisoes').select('*').order('criado_em', { ascending: false }),
         sb.from('eventos').select('*').order('criado_em', { ascending: false }).limit(15),
+        sb.from('anexos').select('item_id'),
       ]);
+      const anexosPorItem = {};
+      // Se a migração de anexos ainda não foi rodada, a plataforma segue funcionando sem eles.
+      if (!anx.error) anx.data.forEach((a) => { anexosPorItem[a.item_id] = (anexosPorItem[a.item_id] || 0) + 1; });
       return {
         instituicoes: ok(inst), membros: ok(mem), itens: ok(itens),
         atribuicoes: ok(atr), decisoes: ok(dec), eventosRecentes: ok(evt),
+        anexosPorItem, anexosAtivos: !anx.error,
       };
     },
     async comentarios(itemId) {
@@ -107,7 +112,49 @@ export function criarBackendSupabase(url, chave) {
       }));
     },
     async comentar(itemId, texto, proposta) {
-      ok(await sb.from('comentarios').insert({ item_id: itemId, texto, proposta_decisao: !!proposta, autor_id: euCache.id }));
+      return ok(await sb.from('comentarios')
+        .insert({ item_id: itemId, texto, proposta_decisao: !!proposta, autor_id: euCache.id }).select().single());
+    },
+
+    // ---- anexos (Supabase Storage, bucket privado "anexos") ----
+    async anexos(itemId) {
+      const r = await sb.from('anexos').select('*').eq('item_id', itemId).order('criado_em');
+      if (r.error) return [];
+      const lista = r.data;
+      const caminhos = lista.filter((a) => a.caminho).map((a) => a.caminho);
+      if (caminhos.length) {
+        const { data } = await sb.storage.from('anexos').createSignedUrls(caminhos, 3600);
+        const mapa = {};
+        (data || []).forEach((d) => { if (d.signedUrl) mapa[d.path] = d.signedUrl; });
+        lista.forEach((a) => { if (a.caminho) a.endereco = mapa[a.caminho] || null; });
+      }
+      lista.forEach((a) => { if (a.tipo === 'link') a.endereco = a.url; });
+      return lista;
+    },
+    async anexar(itemId, { arquivo = null, nome, tipo, mime = null, duracao = null, url = null, comentarioId = null }) {
+      const base = { item_id: itemId, comentario_id: comentarioId, nome, tipo, criado_por: euCache.id };
+      if (tipo === 'link') {
+        ok(await sb.from('anexos').insert({ ...base, url }));
+        return;
+      }
+      const seguro = String(nome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w.-]+/g, '_').slice(-80);
+      const caminho = `${euCache.id}/${itemId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${seguro}`;
+      const up = await sb.storage.from('anexos').upload(caminho, arquivo, { contentType: mime || undefined, upsert: false });
+      if (up.error) {
+        throw new Error(/exceeded|too large|maximum/i.test(up.error.message)
+          ? 'O arquivo passa do limite de 50 MB. Para vídeos maiores, publique no YouTube ou no Drive e anexe o link.'
+          : 'Não foi possível enviar o arquivo: ' + up.error.message);
+      }
+      const ins = await sb.from('anexos').insert({ ...base, caminho, mime, tamanho: arquivo.size, duracao_s: duracao });
+      if (ins.error) {
+        await sb.storage.from('anexos').remove([caminho]);
+        ok(ins);
+      }
+    },
+    async removerAnexo(a) {
+      const r = ok(await sb.from('anexos').delete().eq('id', a.id).select());
+      if (!r.length) throw new Error('Só quem enviou pode remover este anexo.');
+      if (a.caminho) await sb.storage.from('anexos').remove([a.caminho]);
     },
     async proporDecisao(d) {
       ok(await sb.from('decisoes').insert({ ...d, criado_por: euCache.id }));
