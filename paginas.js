@@ -106,11 +106,10 @@ export function moldura(S, rota, conteudo) {
 }
 
 // ------------------------------------------------------------------ acesso
-const origem = () => `<figure class="origem" role="img" aria-label="O MonitoraEA nasce da cooperação entre o INPE e a ANPPEA">
+const origem = () => `<figure class="origem" role="img" aria-label="INPE e ANPPEA, instituições que realizam o MonitoraEA">
   <div class="inst2"><div><img class="o-inpe" src="${LOGO.INPE}" alt=""></div><div><img class="o-anppea" src="${LOGO.ANPPEA}" alt=""></div></div>
-  <div class="ramos" aria-hidden="true"></div><div class="tronco" aria-hidden="true"></div><div class="no" aria-hidden="true"></div>
+  <svg class="confl" viewBox="0 0 480 76" aria-hidden="true"><path d="M120 4 C120 46 240 30 240 70" fill="none" stroke="#0077B8" stroke-width="3" stroke-linecap="round"></path><path d="M360 4 C360 46 240 30 240 70" fill="none" stroke="#F9B233" stroke-width="3" stroke-linecap="round"></path><circle cx="240" cy="70" r="5" fill="#0B3570"></circle></svg>
   <img class="o-mon" src="${LOGO.MONITORAEA}" alt="">
-  <figcaption>O MonitoraEA nasce da cooperação entre o INPE e a ANPPEA</figcaption>
 </figure>`;
 
 export function pagAcesso(S) {
