@@ -44,10 +44,13 @@ img { display: block; }
 .ct { margin-left: auto; font-size: 12px; font-weight: 600; color: #9DB4D3; }
 .ct.hot { background: var(--ceu); color: var(--navy); border-radius: 999px; padding: 0 8px; }
 .foot { margin-top: auto; display: flex; flex-direction: column; gap: 12px; padding: 16px 4px 0; border-top: 1px solid rgba(255,255,255,.1); }
-.me { display: flex; align-items: center; gap: 10px; color: #fff; font-size: 13px; padding: 0 6px; min-width: 0; }
-.me small { display: block; color: #9DB4D3; font-size: 11px; }
-.sair { align-self: flex-start; margin-left: 6px; background: none; border: 1px solid rgba(255,255,255,.25); color: #C9D6EA; border-radius: 999px; min-height: 32px; padding: 0 14px; font-size: 12px; cursor: pointer; }
-.sair:hover { color: #fff; border-color: rgba(255,255,255,.5); }
+.me { display: flex; align-items: center; gap: 10px; color: #fff; font-size: 13px; padding: 0 2px 0 6px; min-width: 0; }
+.me-t { flex: 1; min-width: 0; line-height: 1.35; }
+.me-t span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.me small { display: block; color: #9DB4D3; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sair { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; padding: 0; background: none; border: 0; border-radius: 8px; color: #9DB4D3; cursor: pointer; }
+.sair:hover { color: #fff; background: rgba(255,255,255,.08); }
+.sair:focus-visible { outline: 2px solid var(--ceu); outline-offset: 1px; }
 .main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 .demo-faixa { background: #FFF4D6; color: #6E4300; font-size: 13px; text-align: center; padding: 6px 16px; }
 .demo-faixa button { background: none; border: 0; color: #6E4300; text-decoration: underline; cursor: pointer; padding: 0 4px; }

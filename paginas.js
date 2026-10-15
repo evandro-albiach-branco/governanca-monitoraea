@@ -5,7 +5,7 @@ import {
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
   LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub,
-} from './util.js?v=20261015f';
+} from './util.js?v=20261015g';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
@@ -46,6 +46,7 @@ function stPrazo(it, sempre = true) {
 const opcoes = (pares, sel) => pares.map(([v, t]) => `<option value="${e(v)}"${v === sel ? ' selected' : ''}>${e(t)}</option>`).join('');
 
 const ICONE = {
+  sair: '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"></path><path d="M15 8l4 4-4 4"></path><path d="M19 12H9"></path>',
   cadeado: '<rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path>',
   github: '<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor"></circle>',
   issue: '<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor"></circle>',
@@ -102,8 +103,8 @@ export function moldura(S, rota, conteudo) {
     </nav>
     ${ghLink ? `<div class="ext-gh"><span class="ext-t">Desenvolvimento</span>${ghLink}</div>` : ''}
     <div class="foot">
-      <div class="me">${avatar(S.eu, 'eu')}<div>${e(S.eu.nome)}<small>${e(siglaDe(inst))}, ${e(PERFIL[S.eu.perfil].toLowerCase())}</small></div></div>
-      <button type="button" class="sair" data-acao="sair">Sair</button>
+      <div class="me">${avatar(S.eu, 'eu')}<div class="me-t"><span title="${e(S.eu.nome)}">${e(S.eu.nome)}</span><small>${e(siglaDe(inst))}, ${e(PERFIL[S.eu.perfil].toLowerCase())}</small></div>
+        <button type="button" class="sair" data-acao="sair" aria-label="Sair da plataforma" title="Sair">${svg('sair', 17)}</button></div>
     </div>
   </aside>
   <div class="main">
