@@ -111,6 +111,9 @@ export function chipInst(inst, txt) {
 export function siglaDe(inst) {
   return { INPE: 'INPE', ANPPEA: 'ANPPEA', CONJUNTA: 'Conjunta', DEA_MMA: 'DEA/MMA', CNPQ: 'CNPq' }[inst] || inst || '—';
 }
+// Issues do GitHub: só a equipe do INPE que edita (ou a administração)
+export const podeGithub = (eu) => !!eu && eu.perfil !== 'leitor' && (eu.instituicao_id === 'INPE' || eu.perfil === 'administracao');
+
 export function avatar(m, extra = '') {
   if (!m) return `<span class="av x ${extra}" aria-hidden="true">?</span>`;
   const cls = m.instituicao_id === 'INPE' ? 'i' : m.instituicao_id === 'ANPPEA' ? 'a' : 'x';

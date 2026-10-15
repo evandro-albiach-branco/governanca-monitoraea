@@ -4,8 +4,8 @@ import {
   e, FASES, FASE, FRENTES, FRENTE, TIPO, PRIORIDADE, PERFIL, SIT_ATRIB, PARCEIRAS, LOGO,
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
-  LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro,
-} from './util.js?v=20261015e';
+  LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub,
+} from './util.js?v=20261015f';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
@@ -46,6 +46,7 @@ function stPrazo(it, sempre = true) {
 const opcoes = (pares, sel) => pares.map(([v, t]) => `<option value="${e(v)}"${v === sel ? ' selected' : ''}>${e(t)}</option>`).join('');
 
 const ICONE = {
+  cadeado: '<rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path>',
   github: '<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor"></circle>',
   issue: '<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor"></circle>',
   painel: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path>',
@@ -86,16 +87,20 @@ export function moldura(S, rota, conteudo) {
     (a.para_instituicao === inst && a.situacao === 'aguardando') || (a.de_instituicao === inst && a.situacao === 'contraproposta')).length;
   const nPauta = S.d.decisoes.filter((d) => d.situacao === 'em_pauta').length;
   const nNotif = S.notif.filter((n) => !n.lida).length;
-  const nGithub = S.d.githubAtivo ? issuesParaAvaliar(S).length : 0;
   const ativa = rota === 'item' ? 'quadro' : rota;
+  const nGithub = S.d.githubAtivo && podeGithub(S.eu) ? issuesParaAvaliar(S).length : 0;
+  const ghLink = !S.d.githubAtivo ? '' : podeGithub(S.eu)
+    ? `<a class="nv-gh${ativa === 'github' ? ' on' : ''}" href="#/github"${ativa === 'github' ? ' aria-current="page"' : ''}>${svg('issue', 15)}Issues · GitHub${nGithub ? `<span class="ct">${nGithub}</span>` : ''}</a>`
+    : `<span class="nv-gh off" aria-disabled="true" title="Disponível para a equipe do INPE">${svg('cadeado', 15)}Issues · GitHub</span>`;
   const nv = (r, t, n = 0, quente = false) => `<a class="nv${ativa === r ? ' on' : ''}" href="#/${r}"${ativa === r ? ' aria-current="page"' : ''}>${svg(r)}${t}${n ? `<span class="ct${quente ? ' hot' : ''}">${n}</span>` : ''}</a>`;
   return `<div class="app">
   <aside class="side" aria-label="Menu">
     <a class="brand" href="#/painel"><img src="${LOGO.MONITORAEA}" alt="MonitoraEA, página inicial"><span>Governança compartilhada</span></a>
     ${podeEditar(S.eu) ? `<a class="newbtn${rota === 'novo' ? ' on' : ''}" href="#/novo">${svg('mais', 16)}Novo registro</a>` : ''}
     <nav aria-label="Navegação principal">
-      ${nv('painel', 'Painel')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${S.d.githubAtivo ? nv('github', 'GitHub', nGithub) : ''}${nv('equipe', 'Equipe')}
+      ${nv('painel', 'Painel')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${nv('equipe', 'Equipe')}
     </nav>
+    ${ghLink ? `<div class="ext-gh"><span class="ext-t">Desenvolvimento</span>${ghLink}</div>` : ''}
     <div class="foot">
       <div class="me">${avatar(S.eu, 'eu')}<div>${e(S.eu.nome)}<small>${e(siglaDe(inst))}, ${e(PERFIL[S.eu.perfil].toLowerCase())}</small></div></div>
       <button type="button" class="sair" data-acao="sair">Sair</button>
@@ -550,7 +555,7 @@ export async function pagItem(S, id) {
             <div class="f"><label for="aj-resp">Responsável</label><select id="aj-resp" name="responsavel"><option value="">A definir</option>${opcoes(ativos(S).filter((m) => PARCEIRAS.includes(m.instituicao_id) && m.perfil !== 'leitor').map((m) => [m.id, `${m.nome} (${siglaDe(m.instituicao_id)})`]), x.responsavel_id)}</select></div>
             <div class="f"><label for="aj-pz">Prazo</label><input id="aj-pz" name="prazo" type="date" value="${e(x.prazo || '')}"></div>
             <div class="f"><label for="aj-pr">Prioridade</label><select id="aj-pr" name="prioridade">${opcoes(Object.entries(PRIORIDADE), x.prioridade)}</select></div>
-            ${S.d.githubAtivo ? `<div class="f"><label for="aj-gh">Issue do GitHub (número)</label><input id="aj-gh" name="github_numero" type="number" min="1" step="1" inputmode="numeric" value="${e(x.github_numero || '')}" placeholder="Ex.: 42"><span class="hint">Deixe em branco para desfazer o vínculo.</span></div>` : ''}
+            ${S.d.githubAtivo && podeGithub(S.eu) ? `<div class="f"><label for="aj-gh">Issue do GitHub (número)</label><input id="aj-gh" name="github_numero" type="number" min="1" step="1" inputmode="numeric" value="${e(x.github_numero || '')}" placeholder="Ex.: 42"><span class="hint">Deixe em branco para desfazer o vínculo.</span></div>` : ''}
             <div class="f"><span class="t">Instituições envolvidas</span><div style="display:flex;gap:6px;flex-wrap:wrap">${S.d.instituicoes.map((i) => `<label class="ck"><input type="checkbox" name="envolvidas" value="${e(i.id)}"${(x.envolvidas || []).includes(i.id) ? ' checked' : ''}>${e(i.sigla)}</label>`).join('')}</div></div>
             <button class="btn sm pri" type="submit">Salvar</button>
           </form></details>` : ''}`)}
@@ -589,7 +594,7 @@ export function pagGithub(S) {
     ignoradas: 'Nenhuma issue ignorada.',
     fechadas: 'Nenhuma issue fechada fora do Quadro.',
   };
-  const editor = podeEditar(S.eu);
+  const editor = podeGithub(S.eu);
   const inst = S.eu.instituicao_id;
   const origens = ehAdmin(S.eu) ? ['INPE', 'ANPPEA', 'CONJUNTA'] : [PARCEIRAS.includes(inst) ? inst : null, 'CONJUNTA'].filter(Boolean);
   const semIssue = S.d.itens.filter((x) => aberto(x) && !x.github_numero);
@@ -643,7 +648,7 @@ export function pagGithub(S) {
     <div class="tabs" role="tablist" aria-label="Situação das issues">${Object.entries(rotulos).map(([k, t]) =>
       `<button type="button" role="tab" class="${aba === k ? 'on' : ''}" aria-selected="${aba === k}" data-acao="filtro" data-chave="github" data-valor="${k}">${e(t)}<b>${grupos[k].length}</b></button>`).join('')}</div>
     <section class="card" style="gap:0" aria-label="${e(rotulos[aba])}">${grupos[aba].map(linha).join('') || `<p class="vazio">${vazio[aba]}</p>`}</section>
-    ${editor ? '' : '<p class="sm muted">Seu perfil é de leitura: você acompanha as issues, mas quem escolhe o que entra no Quadro são colaboradores e coordenação.</p>'}
+
   </main>`;
 }
 

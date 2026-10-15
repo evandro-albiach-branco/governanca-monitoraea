@@ -989,8 +989,8 @@ returns bigint
 language plpgsql security definer set search_path = public as $$
 declare cfg github_config; gi github_issues; resp membros; v_id bigint; v_fase fase_item; v_inst text;
 begin
-  if not posso_editar() then
-    raise exception 'SEM_PERMISSAO: seu perfil não permite criar itens';
+  if not (posso_editar() and (minha_instituicao() = 'INPE' or meu_perfil() = 'administracao')) then
+    raise exception 'SEM_PERMISSAO: a seleção de issues do GitHub é feita pela equipe do INPE';
   end if;
   if not (p_origem = minha_instituicao() or p_origem = 'CONJUNTA' or meu_perfil() = 'administracao')
      or p_origem not in ('INPE','ANPPEA','CONJUNTA') then
@@ -1033,8 +1033,8 @@ create or replace function public.github_ignorar(p_numero int, p_ignorar boolean
 language plpgsql security definer set search_path = public as $$
 declare cfg github_config;
 begin
-  if not posso_editar() then
-    raise exception 'SEM_PERMISSAO: seu perfil não permite esta ação';
+  if not (posso_editar() and (minha_instituicao() = 'INPE' or meu_perfil() = 'administracao')) then
+    raise exception 'SEM_PERMISSAO: a seleção de issues do GitHub é feita pela equipe do INPE';
   end if;
   select * into cfg from github_config where id = 1;
   update github_issues set ignorada = coalesce(p_ignorar, true),
@@ -1054,6 +1054,13 @@ create or replace function public.itens_github_antes() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare gi github_issues;
 begin
+  -- vínculo manual (pela plataforma): só a equipe do INPE; a automação do GitHub não tem login
+  if auth.uid() is not null
+     and (tg_op = 'INSERT' and new.github_numero is not null
+          or tg_op = 'UPDATE' and new.github_numero is distinct from old.github_numero)
+     and not (posso_editar() and (minha_instituicao() = 'INPE' or meu_perfil() = 'administracao')) then
+    raise exception 'SEM_PERMISSAO: o vínculo com issues do GitHub é feito pela equipe do INPE';
+  end if;
   if new.github_numero is not null then
     if new.github_numero <= 0 then
       raise exception 'GITHUB_ISSUE: número de issue inválido';

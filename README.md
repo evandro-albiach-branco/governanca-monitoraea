@@ -158,11 +158,11 @@ O GitHub não passa por cima da governança:
 - itens em triagem entre instituições não mudam de fase;
 - nos itens apenas vinculados, título e descrição continuam os da plataforma.
 
-Os leitores veem a página, mas não escolhem issues.
+A página fica num acesso discreto no pé do menu (*Issues · GitHub*). Só a equipe do INPE que edita (colaboradores, coordenação) e a administração podem usá-la: escolher, vincular ou ignorar issues. Para as demais pessoas o acesso aparece bloqueado, e o banco recusa essas ações mesmo que alguém tente por fora do site.
 
 ### Passo a passo (uma vez só)
 
-1. **Supabase → SQL Editor:** rode `github.sql`. Ele só acrescenta, não apaga nada.
+1. **Supabase → SQL Editor:** rode `github.sql`. Ele só acrescenta, não apaga nada, e pode ser rodado de novo a cada atualização (a configuração e as issues já recebidas continuam).
 2. **Supabase → SQL Editor:** rode a configuração, trocando o repositório, o segredo e o e-mail:
 
    ```sql

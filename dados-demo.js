@@ -1,6 +1,6 @@
 // Modo demonstração: mesmos fluxos e regras do banco real, com dados de
 // exemplo guardados apenas neste navegador (localStorage).
-import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe } from './util.js?v=20261015e';
+import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub } from './util.js?v=20261015f';
 
 const CHAVE = 'gov-monitoraea-demo-v3';
 const REPO_DEMO = 'ladis-inpe/monitoraea';
@@ -182,6 +182,7 @@ export function criarBackendDemo() {
     const antes = { ...it };
     if (perfil() !== 'administracao') { delete patch.origem; delete patch.criado_por; }
     if ('github_numero' in patch && (patch.github_numero || null) !== (it.github_numero || null)) {
+      if (!podeGithub(eu())) falha('O vínculo com issues do GitHub é feito pela equipe do INPE.');
       const n = patch.github_numero || null;
       if (n !== null && (!Number.isInteger(n) || n <= 0)) falha('Número de issue inválido.');
       if (n !== null && db.itens.some((x) => x !== it && x.github_numero === n)) falha('Esta issue já está vinculada a outro item.');
@@ -456,7 +457,7 @@ export function criarBackendDemo() {
       salvar();
     },
     async githubAdicionar(numero, origem, frente) {
-      if (!podeEditar()) falha('Seu perfil não permite criar itens.');
+      if (!podeGithub(eu())) falha('A seleção de issues do GitHub é feita pela equipe do INPE.');
       if (!(origem === inst() || origem === 'CONJUNTA' || perfil() === 'administracao')) falha('A origem precisa ser a sua instituição ou conjunta.');
       const gi = db.github_issues.find((g) => g.numero === numero);
       if (!gi) falha(`A issue #${numero} ainda não chegou à plataforma.`);
@@ -482,7 +483,7 @@ export function criarBackendDemo() {
       return it.id;
     },
     async githubIgnorar(numero, ignorar) {
-      if (!podeEditar()) falha('Seu perfil não permite esta ação.');
+      if (!podeGithub(eu())) falha('A seleção de issues do GitHub é feita pela equipe do INPE.');
       const gi = db.github_issues.find((g) => g.numero === numero);
       if (!gi) falha('Issue inexistente.');
       gi.ignorada = !!ignorar; gi.ignorada_por = ignorar ? euId : null;

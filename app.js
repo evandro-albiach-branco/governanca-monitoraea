@@ -1,8 +1,8 @@
 // Inicialização, rotas e despacho de ações.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261015e';
-import { criarBackendDemo } from './dados-demo.js?v=20261015e';
-import * as P from './paginas.js?v=20261015e';
-import { e, tipoDeMime, duracaoFmt } from './util.js?v=20261015e';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261015f';
+import { criarBackendDemo } from './dados-demo.js?v=20261015f';
+import * as P from './paginas.js?v=20261015f';
+import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261015f';
 
 const raiz = document.getElementById('app');
 const S = {
@@ -94,7 +94,7 @@ async function render(opcoes = {}) {
       decisoes: () => P.pagDecisoes(S),
       equipe: () => P.pagEquipe(S),
       notificacoes: () => P.pagNotificacoes(S),
-      github: () => (S.d.githubAtivo ? P.pagGithub(S) : P.pagPainel(S)),
+      github: () => (S.d.githubAtivo && podeGithub(S.eu) ? P.pagGithub(S) : P.pagPainel(S)),
     };
     const titulos = { painel: 'Painel', quadro: 'Quadro', triagem: 'Triagem', item: 'Item', novo: 'Novo registro', decisoes: 'Decisões', equipe: 'Equipe', notificacoes: 'Avisos', github: 'GitHub' };
     const guardados = opcoes.preservar && !mudouRota ? lerCampos() : null;
@@ -218,7 +218,7 @@ window.addEventListener('beforeunload', (ev) => {
 async function iniciar() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261015e');
+      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261015f');
       S.api = criarBackendSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
     } else {
       S.api = criarBackendDemo();
