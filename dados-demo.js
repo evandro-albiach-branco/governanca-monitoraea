@@ -1,6 +1,6 @@
 // Modo demonstração: mesmos fluxos e regras do banco real, com dados de
 // exemplo guardados apenas neste navegador (localStorage).
-import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe } from './util.js';
+import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe } from './util.js?v=20261015c';
 
 const CHAVE = 'gov-monitoraea-demo-v1';
 const CHAVE_EU = 'gov-monitoraea-demo-eu';

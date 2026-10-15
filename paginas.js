@@ -5,7 +5,7 @@ import {
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
   LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro,
-} from './util.js';
+} from './util.js?v=20261015c';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
@@ -106,10 +106,10 @@ export function moldura(S, rota, conteudo) {
 }
 
 // ------------------------------------------------------------------ acesso
-const origem = () => `<figure class="origem" role="img" aria-label="INPE e ANPPEA, instituições que realizam o MonitoraEA">
-  <div class="inst2"><div><img class="o-inpe" src="${LOGO.INPE}" alt=""></div><div><img class="o-anppea" src="${LOGO.ANPPEA}" alt=""></div></div>
-  <svg class="confl" viewBox="0 0 480 76" aria-hidden="true"><path d="M120 4 C120 46 240 30 240 70" fill="none" stroke="#0077B8" stroke-width="3" stroke-linecap="round"></path><path d="M360 4 C360 46 240 30 240 70" fill="none" stroke="#F9B233" stroke-width="3" stroke-linecap="round"></path><circle cx="240" cy="70" r="5" fill="#0B3570"></circle></svg>
+const origem = () => `<figure class="origem" role="img" aria-label="MonitoraEA, realização INPE e ANPPEA">
   <img class="o-mon" src="${LOGO.MONITORAEA}" alt="">
+  <div class="o-real" aria-hidden="true"><span></span><b>Realização</b><span></span></div>
+  <div class="o-inst"><img class="o-inpe" src="${LOGO.INPE}" alt=""><img class="o-anppea" src="${LOGO.ANPPEA}" alt=""></div>
 </figure>`;
 
 export function pagAcesso(S) {
