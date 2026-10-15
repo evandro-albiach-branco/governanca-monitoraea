@@ -6,15 +6,37 @@
   <title>Governança MonitoraEA</title>
   <meta name="description" content="Plataforma de governança compartilhada do MonitoraEA entre INPE e ANPPEA">
   <meta name="robots" content="noindex">
-  <link rel="icon" href="assets/img/logo-inpe.png">
+  <link rel="icon" href="logo-inpe.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/app.css">
+  <link rel="stylesheet" href="app.css">
+  <script>
+    // Diagnóstico de carregamento: se o JavaScript principal não iniciar,
+    // mostra o motivo em vez de ficar em "Carregando…".
+    window.__falhaInicio = function (motivo) {
+      if (window.__appIniciou) return;
+      var a = document.getElementById('app');
+      if (!a || !document.getElementById('carregando-inicial')) return;
+      a.innerHTML = '<div class="carregando" style="max-width:640px;margin:0 auto;padding:60px 24px;text-align:left">'
+        + '<b style="color:#0B3570;font-size:18px">A plataforma não conseguiu abrir.</b><p style="margin-top:12px">'
+        + String(motivo).replace(/[<>&]/g, '') + '</p><p class="hint" style="margin-top:16px">Depois de corrigir, recarregue com Ctrl + Shift + R.</p></div>';
+    };
+    window.addEventListener('error', function (e) {
+      if (e && e.message) {
+        var onde = e.filename ? ' (arquivo ' + e.filename.split('/').slice(-3).join('/') + ', linha ' + e.lineno + ')' : '';
+        window.__falhaInicio('Erro no código: ' + e.message + onde + '. Se o arquivo citado for o config.js, confira se ele foi colado inteiro e com aspas retas (\').');
+      }
+    });
+    setTimeout(function () {
+      window.__falhaInicio('A página demorou demais para iniciar. Confira se todos os arquivos (app.js, config.js, paginas.js, util.js, dados-supabase.js, dados-demo.js, app.css) estão na raiz do repositório no GitHub, ao lado do index.html, e se a sua rede não bloqueia cdn.jsdelivr.net.');
+    }, 20000);
+  </script>
 </head>
 <body>
-  <div id="app"><div class="carregando">Carregando…</div></div>
+  <div id="app"><div class="carregando" id="carregando-inicial">Carregando…</div></div>
   <noscript><p style="padding:24px">Esta plataforma precisa de JavaScript ativado.</p></noscript>
-  <script type="module" src="assets/js/app.js"></script>
+  <script type="module" src="app.js"
+    onerror="window.__falhaInicio('Não encontrei o arquivo app.js. No GitHub, todos os arquivos (app.js, config.js, app.css, logos) precisam estar na raiz do repositório, ao lado do index.html.')"></script>
 </body>
 </html>

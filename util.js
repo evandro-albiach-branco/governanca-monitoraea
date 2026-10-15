@@ -31,9 +31,9 @@ export const SIT_ATRIB = {
 };
 export const PARCEIRAS = ['INPE', 'ANPPEA'];
 export const LOGO = {
-  INPE: 'assets/img/logo-inpe.png',
-  ANPPEA: 'assets/img/logo-anppea.png',
-  MONITORAEA: 'assets/img/logo-monitoraea.png',
+  INPE: 'logo-inpe.png',
+  ANPPEA: 'logo-anppea.png',
+  MONITORAEA: 'logo-monitoraea.png',
 };
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };

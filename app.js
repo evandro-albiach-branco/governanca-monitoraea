@@ -45,6 +45,7 @@ async function render() {
       if (rota !== 'acesso') { location.replace('#/acesso'); }
       document.title = 'Acesso · Governança MonitoraEA';
       raiz.innerHTML = P.pagAcesso(S);
+      window.__appIniciou = true;
       return;
     }
     if (rota === 'acesso') { location.replace('#/painel'); return; }
@@ -65,10 +66,12 @@ async function render() {
     const conteudo = await (paginas[rota] || paginas.painel)();
     const y = window.scrollY;
     raiz.innerHTML = P.moldura(S, rota, conteudo);
+    window.__appIniciou = true;
     document.title = `${titulos[rota] || 'Painel'} · Governança MonitoraEA`;
     if (mudouRota) window.scrollTo(0, 0); else window.scrollTo(0, y);
   } catch (err) {
     console.error(err);
+    window.__appIniciou = true;
     raiz.innerHTML = `<div class="carregando">Não foi possível carregar: ${e(err.message)}<br><br><button class="btn" type="button" onclick="location.reload()">Tentar de novo</button></div>`;
   } finally {
     renderizando = false;
@@ -127,6 +130,7 @@ async function iniciar() {
     }
   } catch (err) {
     console.error(err);
+    window.__appIniciou = true;
     raiz.innerHTML = `<div class="carregando">Não foi possível iniciar a plataforma: ${e(err.message)}</div>`;
     return;
   }
