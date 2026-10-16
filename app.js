@@ -1,8 +1,8 @@
 // Inicialização, rotas e despacho de ações.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261015g';
-import { criarBackendDemo } from './dados-demo.js?v=20261015g';
-import * as P from './paginas.js?v=20261015g';
-import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261015g';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261016a';
+import { criarBackendDemo } from './dados-demo.js?v=20261016a';
+import * as P from './paginas.js?v=20261016a';
+import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261016a';
 
 const raiz = document.getElementById('app');
 const S = {
@@ -218,7 +218,7 @@ window.addEventListener('beforeunload', (ev) => {
 async function iniciar() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261015g');
+      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261016a');
       S.api = criarBackendSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
     } else {
       S.api = criarBackendDemo();

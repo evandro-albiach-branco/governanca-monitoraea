@@ -5,7 +5,7 @@ import {
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
   LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub,
-} from './util.js?v=20261015g';
+} from './util.js?v=20261016a';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
@@ -46,6 +46,7 @@ function stPrazo(it, sempre = true) {
 const opcoes = (pares, sel) => pares.map(([v, t]) => `<option value="${e(v)}"${v === sel ? ' selected' : ''}>${e(t)}</option>`).join('');
 
 const ICONE = {
+  envelope: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3.5 6.5 8.5 6.5 8.5-6.5"></path>',
   sair: '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"></path><path d="M15 8l4 4-4 4"></path><path d="M19 12H9"></path>',
   cadeado: '<rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path>',
   github: '<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor"></circle>',
@@ -755,6 +756,29 @@ export function pagDecisoes(S) {
 }
 
 // ------------------------------------------------------------------ equipe
+// Texto do convite, pronto para mandar por e-mail
+function mensagemConvite(c) {
+  const url = location.origin + location.pathname;
+  const validade = c.expira_em ? dataLonga(c.expira_em) : '';
+  const assunto = 'Convite para a Governança MonitoraEA';
+  const corpo = `Olá,
+
+Você foi convidado(a) para a plataforma de Governança do MonitoraEA, compartilhada entre o INPE e a ANPPEA, com o perfil de ${PERFIL[c.perfil].toLowerCase()} (${siglaDe(c.instituicao_id)}).
+
+Para ativar o seu acesso:
+1. Abra ${url}
+2. Clique em "Primeiro acesso".
+3. Informe este e-mail (${c.email}) e o código: ${c.codigo}
+4. Escreva o seu nome e crie uma senha.
+
+${validade ? `O código vale até ${validade}.\n\n` : ''}Qualquer dúvida, é só responder esta mensagem.`;
+  return { assunto, corpo, mailto: `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}` };
+}
+const botoesConvite = (c, sm = true) => {
+  const m = mensagemConvite(c);
+  return `<a class="btn ${sm ? 'sm' : ''} pri" href="${e(m.mailto)}">${svg('envelope', 15)}Enviar por e-mail</a><button type="button" class="btn ${sm ? 'sm' : ''}" data-acao="copiar" data-texto="${e(m.corpo)}">Copiar mensagem</button>`;
+};
+
 export async function pagEquipe(S) {
   const ab = S.d.itens.filter(aberto);
   const conta = (m) => ({
@@ -819,8 +843,8 @@ export async function pagEquipe(S) {
         <div><button class="btn pri" type="submit">Gerar convite</button></div>
       </form>`, '', ' style="flex:999 1 560px"')}
       <div class="lateral">
-        ${novo ? `<section class="card cp" style="display:flex;flex-direction:column;gap:10px;background:var(--sky);border-color:var(--sky)"><b>Convite criado para ${e(novo.email)}</b><span class="codigo">${e(novo.codigo)}</span><p class="sm">Envie à pessoa este código e o endereço da plataforma. Ela usa a aba Primeiro acesso, com este mesmo e-mail. Vale por 30 dias.</p></section>` : ''}
-        ${cartao('Convites pendentes', `<div class="cb">${convites.filter((c) => !c.aceito_em).map((c) => `<div class="row"><div style="min-width:0"><b style="font-weight:500">${e(c.email)}</b><div class="xs muted">${e(siglaDe(c.instituicao_id))}, ${e(PERFIL[c.perfil].toLowerCase())} · <span style="font-family:ui-monospace,monospace">${e(c.codigo)}</span></div></div></div>`).join('') || '<p class="vazio">Nenhum convite pendente.</p>'}</div>`)}
+        ${novo ? `<section class="card cp" style="display:flex;flex-direction:column;gap:10px;background:var(--sky);border-color:var(--sky)"><b>Convite criado para ${e(novo.email)}</b><span class="codigo">${e(novo.codigo)}</span><p class="sm">A plataforma não envia e-mails sozinha. Mande o convite pelo seu e-mail: o botão abaixo abre a mensagem já escrita, com o código, o endereço da plataforma e o passo a passo.</p><div style="display:flex;gap:8px;flex-wrap:wrap">${botoesConvite(novo, false)}</div></section>` : ''}
+        ${cartao('Convites pendentes', `<div class="cb">${convites.filter((c) => !c.aceito_em).map((c) => `<div class="row"><div style="min-width:0"><b style="font-weight:500">${e(c.email)}</b><div class="xs muted">${e(siglaDe(c.instituicao_id))}, ${e(PERFIL[c.perfil].toLowerCase())} · <span style="font-family:ui-monospace,monospace">${e(c.codigo)}</span></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${botoesConvite(c)}</div></div></div>`).join('') || '<p class="vazio">Nenhum convite pendente.</p>'}</div>`)}
       </div>
     </div>` : ''}
 
@@ -909,6 +933,16 @@ export const acoes = {
   async 'reiniciar-demo'(S) { S.api.reiniciarDemo(); return { recarregar: true, aviso: 'Exemplos restaurados.' }; },
   async sair(S) { await S.api.sair(); S.eu = null; S.pend = {}; location.hash = '#/acesso'; return {}; },
   async 'aba-acesso'(S, el) { S.abaAcesso = el.dataset.aba; return {}; },
+  async copiar(S, el) {
+    const t = el.dataset.texto || '';
+    try {
+      await navigator.clipboard.writeText(t);
+    } catch {
+      const a = document.createElement('textarea');
+      a.value = t; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove();
+    }
+    return { aviso: 'Mensagem copiada. Cole no e-mail ou no WhatsApp.' };
+  },
   async 'gh-ignorar'(S, el) {
     const ignorar = el.dataset.valor === '1';
     await S.api.githubIgnorar(Number(el.dataset.numero), ignorar);
@@ -1080,7 +1114,7 @@ export const formularios = {
       email: txt(fd, 'email').toLowerCase(), instituicao_id: txt(fd, 'instituicao_id'),
       perfil: txt(fd, 'perfil'), papel: txt(fd, 'papel') || null,
     });
-    return { recarregar: true, aviso: 'Convite gerado.' };
+    return { recarregar: true, aviso: 'Convite gerado. Agora mande pelo seu e-mail.' };
   },
   async 'gh-adicionar'(S, fd, form) {
     const n = Number(form.dataset.numero);
