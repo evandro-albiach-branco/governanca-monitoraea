@@ -21,7 +21,7 @@ begin
        'membros_de','sigla','rotulo_fase','sou_coordenacao_de','posso_editar','sou_membro',
        'meu_perfil','minha_instituicao','anexos_depois',
        'github_configurar','github_frente','github_sincronizar','itens_github_antes','itens_github_depois','definir_github',
-       'github_adicionar','github_ignorar','github_membro_atribuido','itens_edicao','itens_destaque')
+       'github_adicionar','github_ignorar','github_membro_atribuido','itens_edicao','itens_destaque','itens_fase_marca')
   loop
     execute 'drop function if exists ' || r.f::text || ' cascade';
   end loop;

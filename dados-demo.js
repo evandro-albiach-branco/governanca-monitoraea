@@ -1,8 +1,8 @@
 // Modo demonstração: mesmos fluxos e regras do banco real, com dados de
 // exemplo guardados apenas neste navegador (localStorage).
-import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub, podeExcluirItem } from './util.js?v=20261016g';
+import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub, podeExcluirItem } from './util.js?v=20261016h';
 
-const CHAVE = 'gov-monitoraea-demo-v4';
+const CHAVE = 'gov-monitoraea-demo-v5';
 const REPO_DEMO = 'ladis-inpe/monitoraea';
 const CHAVE_EU = 'gov-monitoraea-demo-eu';
 
@@ -44,7 +44,7 @@ function semente() {
     descricao: '', modulo: '', envolvidas: [], prioridade: 'media', vez_nota: null, instrumento: null,
     concluido_em: null, destaque: [6, 9, 11, 14, 15, 8].includes(o.id), github_repo: null, github_numero: null, github_url: null, github_estado: null,
     github_etiquetas: [], github_atribuidos: [], github_criado: false, github_sinc: null,
-    ...o, criado_em: agoraMenos(o.idade ?? 10), atualizado_em: agoraMenos(o.mexido ?? 1),
+    fase_por: o.criado_por, ...o, criado_em: agoraMenos(o.idade ?? 10), atualizado_em: agoraMenos(o.mexido ?? 1), fase_desde: agoraMenos(o.mexido ?? 1),
   });
   const itens = [
     I({ id: 1, tipo: 'demanda', titulo: 'Filtro por bioma na perspectiva Iniciativas', descricao: 'Permitir filtrar as iniciativas por bioma nos mapas e gráficos da perspectiva Iniciativas.', frente: 'desenvolvimento', modulo: 'Portal · Sínteses', origem: 'ANPPEA', fase: 'triagem', responsavel_id: null, vez_instituicao: 'INPE', vez_membro_id: null, vez_nota: 'Aguardando triagem', prazo: d(21), criado_por: 'm7', idade: 1, mexido: 0.5 }),
@@ -207,6 +207,7 @@ export function criarBackendDemo() {
     if (it.fase === 'publicado' && antes.fase !== 'publicado') it.concluido_em = agora();
     if (!['publicado', 'arquivado'].includes(it.fase)) it.concluido_em = null;
     if (it.fase !== antes.fase) {
+      it.fase_desde = agora(); it.fase_por = euId;
       evento(it.id, 'fase', `${FASE[antes.fase]} → ${FASE[it.fase]}`);
       if (!silencio && it.fase === 'validacao') {
         notificar([it.criado_por, ...membrosDe(it.origem === 'CONJUNTA' ? 'INPE' : it.origem, true)], it.id, 'validacao', 'Pronto para validação: ' + it.titulo);
@@ -214,7 +215,7 @@ export function criarBackendDemo() {
     }
     if (it.vez_instituicao !== antes.vez_instituicao || it.vez_membro_id !== antes.vez_membro_id) {
       const quem = it.vez_membro_id ? ` (${membro(it.vez_membro_id)?.nome})` : '';
-      evento(it.id, 'vez', `A vez passou para ${siglaDe(it.vez_instituicao)}${quem}${it.vez_nota ? ': ' + it.vez_nota : ''}`);
+      evento(it.id, 'vez', `Próxima ação encaminhada para ${siglaDe(it.vez_instituicao)}${quem}${it.vez_nota ? ': ' + it.vez_nota : ''}`);
       if (!silencio) {
         notificar(it.vez_membro_id ? [it.vez_membro_id] : membrosDe(it.vez_instituicao, true), it.id, 'vez', 'A próxima ação está com você: ' + it.titulo);
       }
@@ -305,7 +306,7 @@ export function criarBackendDemo() {
         id: novoId(), tipo: 'atividade', descricao: '', frente: 'desenvolvimento', modulo: '', envolvidas: [],
         fase: 'priorizado', prioridade: 'media', responsavel_id: null, vez_instituicao: inst(), vez_membro_id: null,
         vez_nota: null, prazo: null, instrumento: null, concluido_em: null,
-        ...dados, criado_por: euId, criado_em: agora(), atualizado_em: agora(),
+        ...dados, criado_por: euId, criado_em: agora(), atualizado_em: agora(), fase_desde: agora(), fase_por: euId,
       };
       db.itens.push(it);
       evento(it.id, 'criado', 'Registrou o item');
@@ -484,7 +485,7 @@ export function criarBackendDemo() {
         modulo: '', origem, envolvidas: origem === 'CONJUNTA' ? ['INPE', 'ANPPEA'] : [origem],
         fase: gi.estado === 'aberta' ? (resp ? 'andamento' : 'priorizado') : gi.estado === 'fechada' ? 'publicado' : 'arquivado',
         prioridade: 'media', responsavel_id: resp?.id || null, vez_instituicao: resp?.instituicao_id || vezInst, vez_membro_id: resp?.id || null,
-        vez_nota: null, prazo: null, instrumento: null, criado_por: euId, criado_em: agora(), atualizado_em: agora(),
+        vez_nota: null, prazo: null, instrumento: null, criado_por: euId, criado_em: agora(), atualizado_em: agora(), fase_desde: agora(), fase_por: euId,
         concluido_em: gi.estado === 'fechada' ? agora() : null,
         github_repo: gi.repo, github_numero: gi.numero, github_url: gi.url, github_estado: gi.estado,
         github_etiquetas: [...gi.etiquetas], github_atribuidos: [...gi.atribuidos], github_criado: true, github_sinc: gi.sinc,

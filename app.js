@@ -1,9 +1,9 @@
 // Inicialização, rotas e despacho de ações.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261016g';
-import { criarBackendDemo } from './dados-demo.js?v=20261016g';
-import * as P from './paginas.js?v=20261016g';
-import { pagSintese } from './sintese.js?v=20261016g';
-import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261016g';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261016h';
+import { criarBackendDemo } from './dados-demo.js?v=20261016h';
+import * as P from './paginas.js?v=20261016h';
+import { pagSintese } from './sintese.js?v=20261016h';
+import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261016h';
 
 const raiz = document.getElementById('app');
 const S = {
@@ -213,6 +213,38 @@ document.addEventListener('submit', (ev) => {
     .finally(() => botoes.forEach((b) => { b.disabled = false; }));
 });
 
+// Quadro: arrastar um card para outra coluna muda a fase
+let arrastando = null;
+document.addEventListener('dragstart', (ev) => {
+  const c = ev.target.closest?.('[data-arrastar]');
+  if (!c) return;
+  arrastando = { id: c.dataset.arrastar, fase: c.dataset.fase };
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', c.dataset.arrastar);
+  c.classList.add('arrastando');
+  document.querySelectorAll('[data-coluna]').forEach((col) => { if (col.dataset.coluna !== arrastando.fase) col.classList.add('pode-soltar'); });
+});
+document.addEventListener('dragend', () => {
+  arrastando = null;
+  document.querySelectorAll('.arrastando, .pode-soltar, .soltar-aqui').forEach((n) => n.classList.remove('arrastando', 'pode-soltar', 'soltar-aqui'));
+});
+document.addEventListener('dragover', (ev) => {
+  const col = ev.target.closest?.('[data-coluna]');
+  if (!arrastando || !col || col.dataset.coluna === arrastando.fase) return;
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.soltar-aqui').forEach((n) => { if (n !== col) n.classList.remove('soltar-aqui'); });
+  col.classList.add('soltar-aqui');
+});
+document.addEventListener('drop', (ev) => {
+  const col = ev.target.closest?.('[data-coluna]');
+  if (!arrastando || !col || col.dataset.coluna === arrastando.fase) return;
+  ev.preventDefault();
+  const alvo = { dataset: { id: arrastando.id, fase: col.dataset.coluna } };
+  arrastando = null;
+  executar(() => P.acoes.mover(S, alvo), true);
+});
+
 window.addEventListener('hashchange', () => render());
 window.addEventListener('beforeunload', (ev) => {
   if (S.rec || Object.values(S.pend).some((l) => l && l.length)) { ev.preventDefault(); ev.returnValue = ''; }
@@ -221,7 +253,7 @@ window.addEventListener('beforeunload', (ev) => {
 async function iniciar() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261016g');
+      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261016h');
       S.api = criarBackendSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
     } else {
       S.api = criarBackendDemo();

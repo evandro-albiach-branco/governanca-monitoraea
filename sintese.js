@@ -1,5 +1,5 @@
 // Síntese: página inicial, dashboard calculado a partir dos itens.
-import { e, FRENTES, FASE, hojeISO, dataCurta, aberto } from './util.js?v=20261016g';
+import { e, FRENTES, FASE, hojeISO, dataCurta, aberto } from './util.js?v=20261016h';
 
 // Cores dos gráficos (validadas para daltonismo; o amarelo da ANPPEA ganha um tom mais escuro para marcas finas)
 const COR = { INPE: '#0077B8', ANPPEA: '#D8920C', CONJUNTA: '#7A5FB8', OUTRA: '#8A97A8' };

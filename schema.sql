@@ -28,7 +28,7 @@ begin
        'membros_de','sigla','rotulo_fase','sou_coordenacao_de','posso_editar','sou_membro',
        'meu_perfil','minha_instituicao','anexos_depois',
        'github_configurar','github_frente','github_sincronizar','itens_github_antes','itens_github_depois','definir_github',
-       'github_adicionar','github_ignorar','github_membro_atribuido','itens_edicao','itens_destaque')
+       'github_adicionar','github_ignorar','github_membro_atribuido','itens_edicao','itens_destaque','itens_fase_marca')
   loop
     execute 'drop function if exists ' || r.f::text || ' cascade';
   end loop;
@@ -232,7 +232,7 @@ language sql immutable as $$
   select case f
     when 'triagem' then 'Entrada e triagem' when 'priorizado' then 'Priorizado'
     when 'andamento' then 'Em andamento' when 'validacao' then 'Em validação'
-    when 'decisao' then 'Aguardando decisão' when 'publicado' then 'Publicado'
+    when 'decisao' then 'Aguardando decisão' when 'publicado' then 'Concluído'
     else 'Arquivado' end
 $$;
 
@@ -328,7 +328,7 @@ begin
   if new.vez_instituicao is distinct from old.vez_instituicao
      or new.vez_membro_id is distinct from old.vez_membro_id then
     insert into eventos (item_id, autor_id, tipo, detalhe)
-    values (new.id, auth.uid(), 'vez', 'A vez passou para ' || coalesce(sigla(new.vez_instituicao), '—')
+    values (new.id, auth.uid(), 'vez', 'Próxima ação encaminhada para ' || coalesce(sigla(new.vez_instituicao), '—')
             || coalesce(' (' || (select nome from membros where id = new.vez_membro_id) || ')', '')
             || coalesce(': ' || nullif(new.vez_nota, ''), ''));
     if not silencio then
@@ -1194,3 +1194,33 @@ revoke execute on function public.itens_destaque() from public, anon;
 drop trigger if exists itens_destaque on public.itens;
 create trigger itens_destaque before update of destaque on public.itens
 for each row execute function public.itens_destaque();
+
+-- =====================================================================
+-- Quadro: desde quando o item está na coluna (mesmo conteúdo de quadro.sql)
+-- =====================================================================
+-- Desde quando o item está na coluna atual, e quem o moveu
+alter table public.itens add column if not exists fase_desde timestamptz;
+alter table public.itens add column if not exists fase_por uuid references public.membros(id) on delete set null;
+update public.itens i set
+  fase_desde = coalesce((select max(e.criado_em) from public.eventos e where e.item_id = i.id and e.tipo = 'fase'), i.criado_em),
+  fase_por   = coalesce((select e.autor_id from public.eventos e where e.item_id = i.id and e.tipo = 'fase' order by e.criado_em desc limit 1), i.criado_por)
+where i.fase_desde is null;
+alter table public.itens alter column fase_desde set default now();
+
+create or replace function public.itens_fase_marca() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    new.fase_desde := coalesce(new.fase_desde, now());
+    new.fase_por := coalesce(new.fase_por, auth.uid(), new.criado_por);
+  elsif new.fase is distinct from old.fase then
+    new.fase_desde := now();
+    new.fase_por := auth.uid();
+  end if;
+  return new;
+end $$;
+revoke execute on function public.itens_fase_marca() from public, anon;
+drop trigger if exists itens_fase_marca on public.itens;
+create trigger itens_fase_marca before insert or update of fase on public.itens
+for each row execute function public.itens_fase_marca();
+

@@ -15,6 +15,7 @@ Se a plataforma já está no ar, com contas e dados, **não rode o `schema.sql` 
 1. No SQL Editor do Supabase, rode **`anexos.sql`**. Ele só acrescenta a tabela de anexos, o espaço de arquivos (bucket `anexos`) e as regras de acesso; não apaga nada e pode ser rodado mais de uma vez.
    Para a integração com o GitHub, rode também **`github.sql`** (também só acrescenta) e siga a seção 7.
    Para editar e excluir itens, rode **`editar-excluir.sql`**; para os destaques da Síntese, rode **`sintese.sql`**. Os dois só acrescentam.
+   Para mover cards no Quadro e registrar as mudanças de coluna, rode **`quadro.sql`** (só acrescenta).
 2. No GitHub, envie os arquivos novos por cima dos antigos (*Add file → Upload files*, selecionando todos de uma vez). **Não substitua o `config.js`**, que já tem as suas chaves.
 3. Recarregue o site com Ctrl + Shift + R.
 
@@ -117,6 +118,7 @@ anexos.sql             acrescenta anexos a uma instalação existente (não apag
 github.sql             acrescenta a integração com as issues do GitHub (não apaga nada)
 editar-excluir.sql     edição completa e exclusão de itens (não apaga nada)
 sintese.sql            destaques (★) usados na Síntese (não apaga nada)
+quadro.sql             registro de mudança de coluna e coluna "Concluído" (não apaga nada)
 sintese.js             página Síntese (dashboard)
 governanca-monitoraea.yml  automação que vai no repositório das issues (seção 7)
 00-limpar.sql          remove a plataforma do banco (apaga os dados)
@@ -216,3 +218,12 @@ A aba **Síntese** mostra o MonitoraEA em um olhar, calculado na hora a partir d
 A coordenação e a administração marcam itens com **★ Destacar**, na ficha do item, para que entrem na linha do tempo. Sem nenhum destaque marcado, a linha do tempo mostra os atrasados, os de prioridade alta e os de prazo próximo.
 
 O botão **Imprimir ou salvar PDF** gera uma versão limpa, sem menu, para levar a reuniões.
+
+## 9. Quadro e próxima ação
+
+- **Mover cards:** no Quadro, arraste um card para outra coluna para mudar a fase.
+  - A coluna *Entrada e triagem* só recebe itens atribuídos por outra instituição.
+  - Itens com atribuição aguardando resposta ficam parados até a triagem terminar.
+  - Cada card mostra desde quando está na coluna e quem o moveu; a ficha do item guarda o histórico completo.
+  - No celular, onde não dá para arrastar, a fase muda na ficha do item.
+- **Próxima ação (antigo "passar a vez"):** cada item aberto tem alguém (uma pessoa ou a coordenação de uma instituição) com quem está o próximo passo. Na ficha, o botão **Encaminhar** passa esse próximo passo a outra pessoa ou instituição, com uma nota do que precisa ser feito. Quem recebe é avisado e vê o item em *Esperando por você*, no Painel.

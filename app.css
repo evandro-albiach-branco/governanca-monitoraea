@@ -433,3 +433,11 @@ textarea { padding: 10px 12px; resize: vertical; }
   .sx-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* Quadro: mover cards entre colunas */
+.kc[draggable="true"] { cursor: grab; }
+.kc.arrastando { opacity: .45; cursor: grabbing; }
+.col.pode-soltar { outline: 2px dashed #B7C6D9; outline-offset: -2px; }
+.col.soltar-aqui { outline: 2px solid var(--blue); background: #E1F0FB; }
+.kmov { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); border-top: 1px solid rgba(16,33,58,.08); padding-top: 6px; margin-top: -2px; }
+.kmov svg { flex: none; opacity: .7; }

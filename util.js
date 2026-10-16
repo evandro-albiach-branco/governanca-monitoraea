@@ -6,7 +6,7 @@ export const FASES = [
   ['andamento', 'Em andamento'],
   ['validacao', 'Em validação'],
   ['decisao', 'Aguardando decisão'],
-  ['publicado', 'Publicado'],
+  ['publicado', 'Concluído'],
 ];
 export const FASE = Object.fromEntries([...FASES, ['arquivado', 'Arquivado']]);
 

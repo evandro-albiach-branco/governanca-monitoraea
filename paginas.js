@@ -5,7 +5,7 @@ import {
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
   LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub, podeExcluirItem,
-} from './util.js?v=20261016g';
+} from './util.js?v=20261016h';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
@@ -48,6 +48,7 @@ function stPrazo(it, sempre = true) {
 const opcoes = (pares, sel) => pares.map(([v, t]) => `<option value="${e(v)}"${v === sel ? ' selected' : ''}>${e(t)}</option>`).join('');
 
 const ICONE = {
+  seta: '<path d="M5 12h13"></path><path d="m13 6 6 6-6 6"></path>',
   sintese: '<path d="M4 20V11"></path><path d="M10 20V5"></path><path d="M16 20v-7"></path><path d="M21 20H3"></path>',
   estrela: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"></path>',
   envelope: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3.5 6.5 8.5 6.5 8.5-6.5"></path>',
@@ -270,9 +271,17 @@ export function pagQuadro(S) {
   const conta = (k) => porOrigem.filter((x) => (k === 'todas' || x.frente === k) && aberto(x)).length;
   const nAnx = S.d.anexosPorItem || {};
 
+  const comAtribAberta = new Set(S.d.atribuicoes.filter((a) => ['aguardando', 'contraproposta'].includes(a.situacao)).map((a) => a.item_id));
+  const movel = (x) => podeEditarItem(S.eu, x) && x.fase !== 'triagem' && !comAtribAberta.has(x.id);
+  const movimento = (x) => {
+    if (!x.fase_desde) return '';
+    const quem = x.fase_por ? membro(S, x.fase_por) : null;
+    const nome = quem ? quem.nome.split(' ')[0] : (x.github_numero ? 'GitHub' : '');
+    return `<span class="kmov" title="Nesta coluna desde ${dataLonga(x.fase_desde)}${quem ? `, movido por ${e(quem.nome)}` : ''}">${svg('seta', 12)}${x.fase === 'publicado' ? 'concluído' : 'desde'} ${dataCurta(x.fase_desde)}${nome ? ` · ${e(nome)}` : ''}</span>`;
+  };
   const card = (x) => {
     const s = situacaoPrazo(x);
-    return `<a class="kc ${e(x.origem)}${aberto(x) ? '' : ' feito'}" href="#/item/${x.id}">
+    return `<a class="kc ${e(x.origem)}${aberto(x) ? '' : ' feito'}" href="#/item/${x.id}"${movel(x) ? ` draggable="true" data-arrastar="${x.id}" data-fase="${x.fase}"` : ''}>
       <span class="inst ${e(x.origem)}">${e(siglaDe(x.origem))} · ${e(FRENTE_CURTA[x.frente] || '')}</span>
       <span class="kt">${e(x.titulo)}</span>
       <div class="km">${aberto(x) ? `
@@ -281,14 +290,15 @@ export function pagQuadro(S) {
         ${nAnx[x.id] ? `<span class="clip" title="${nAnx[x.id]} anexos">${svg('clipe', 13)}${nAnx[x.id]}</span>` : ''}
         ${x.github_numero ? `<span class="clip" title="Issue #${x.github_numero} no GitHub">${svg('issue', 12)}#${x.github_numero}</span>` : ''}
         <span class="vezp"><i style="background:${corInst(x.vez_instituicao)}"></i>${e(siglaDe(x.vez_instituicao))}</span>`
-      : `<span>Publicado em ${dataCurta(x.concluido_em || x.atualizado_em)}</span>`}</div>
+      : `<span>Concluído em ${dataCurta(x.concluido_em || x.atualizado_em)}</span>`}</div>
+      ${aberto(x) ? movimento(x) : ''}
     </a>`;
   };
 
   return `<main class="page wide">
     ${cab({
       titulo: 'Quadro do sistema',
-      sub: 'Desenvolvimento e operação do MonitoraEA. A cor do card indica quem originou o item; o ponto no rodapé, com quem está a próxima ação.',
+      sub: `Desenvolvimento e operação do MonitoraEA. A cor do card indica quem originou o item; o ponto no rodapé, com quem está a próxima ação.${podeEditar(S.eu) ? ' Arraste um card para outra coluna para mudar a fase: a mudança fica registrada no card e no histórico.' : ''}`,
       acoes: podeEditar(S.eu) ? '<a class="btn pri" href="#/novo">Nova demanda</a>' : '',
     })}
     ${q ? `<div class="sm">Resultados para <b>“${e(fil.q)}”</b>: ${vis.length} ${vis.length === 1 ? 'item' : 'itens'}. <button type="button" class="lnk" data-acao="limpar-busca">Limpar busca</button></div>` : ''}
@@ -302,7 +312,7 @@ export function pagQuadro(S) {
     <div class="board">
       ${FASES.map(([f, t]) => {
         const xs = vis.filter((x) => x.fase === f);
-        return `<section class="col" aria-label="${e(t)}"><div class="colh">${f === 'triagem' ? `<a href="#/triagem">${t}</a>` : t}<span>${xs.length}</span></div>${xs.map(card).join('')}</section>`;
+        return `<section class="col" aria-label="${e(t)}"${f !== 'triagem' ? ` data-coluna="${f}"` : ''}><div class="colh">${f === 'triagem' ? `<a href="#/triagem">${t}</a>` : t}<span>${xs.length}</span></div>${xs.map(card).join('')}</section>`;
       }).join('')}
     </div>
   </main>`;
@@ -507,11 +517,12 @@ export async function pagItem(S, id) {
             <p>${e(x.vez_nota || FASE[x.fase])}</p>
             ${aAberta ? `<p class="sm">Atribuição ${e(SIT_ATRIB[aAberta.situacao].toLowerCase())}. <a href="#/triagem">Ver na triagem</a></p>` : ''}</div>
           </div>
-          ${editar && !aAberta ? `<details><summary class="btn sm pri">Passar a vez</summary>
+          ${editar && !aAberta ? `<details><summary class="btn sm pri">Encaminhar</summary>
             <form class="form" data-form="passar-vez" data-id="${x.id}" style="margin-top:12px;min-width:280px;background:#fff;padding:14px;border-radius:12px">
               <div class="f"><label for="pv-dest">Para</label><select id="pv-dest" name="destino" required>${opcoes(destinosVez)}</select></div>
               <div class="f"><label for="pv-nota">O que precisa ser feito</label><input id="pv-nota" name="nota" type="text" required></div>
-              <button class="btn sm pri" type="submit">Passar a vez</button>
+              <p class="xs muted">Use quando o próximo passo depende de outra pessoa ou instituição. Ela é avisada e o item aparece em "Esperando por você" no Painel dela.</p>
+              <button class="btn sm pri" type="submit">Encaminhar</button>
             </form></details>` : ''}
         </section>` : ''}
 
@@ -812,7 +823,7 @@ export async function pagEquipe(S) {
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><h2 style="font-size:16px;font-weight:600">${inst}</h2><p class="xs muted">${pessoas.length} ${pessoas.length === 1 ? 'pessoa' : 'pessoas'}</p></div><img src="${LOGO[inst]}" alt="" style="height:${inst === 'INPE' ? 34 : 22}px;width:auto"></div>
       <div class="nums">
         <div><b>${ab.filter((x) => ids.has(x.responsavel_id)).length}</b><span>como responsável</span></div>
-        <div><b>${ab.filter((x) => x.vez_instituicao === inst).length}</b><span>com a vez</span></div>
+        <div><b>${ab.filter((x) => x.vez_instituicao === inst).length}</b><span>com a próxima ação</span></div>
         <div><b style="color:var(--verm)">${ab.filter((x) => ids.has(x.responsavel_id) && x.prazo && diasAte(x.prazo) < 0).length}</b><span>atrasados</span></div>
         <div><b>${S.d.atribuicoes.filter((a) => a.para_instituicao === inst && a.situacao === 'aguardando').length}</b><span>na triagem</span></div>
       </div></section>`;
@@ -830,7 +841,7 @@ export async function pagEquipe(S) {
     })}
     <div class="g2" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">${resumo('INPE')}${resumo('ANPPEA')}</div>
     ${cartao('Pessoas', `<div class="tbl"><table>
-      <thead><tr><th>Pessoa</th><th>Instituição</th><th>Perfil</th><th class="n">Responsável</th><th class="n">Com a vez</th><th class="n">Atrasados</th><th class="n">Concluídos em 30 dias</th><th>Carga</th></tr></thead>
+      <thead><tr><th>Pessoa</th><th>Instituição</th><th>Perfil</th><th class="n">Responsável</th><th class="n">Com a próxima ação</th><th class="n">Atrasados</th><th class="n">Concluídos em 30 dias</th><th>Carga</th></tr></thead>
       <tbody>${ms.map(({ m, c }) => {
         const gerir = coordenaDe(S.eu, m.instituicao_id) && m.id !== S.eu.id;
         return `<tr${m.ativo ? '' : ' style="opacity:.55"'}>
@@ -869,7 +880,7 @@ export async function pagEquipe(S) {
       </form>`);
     })() : ''}
 
-    <p class="sm muted"><b style="color:var(--ink);font-weight:600">Perfis de acesso.</b> Leitores veem tudo e comentam. Colaboradores criam, anexam, atribuem e passam a vez. A coordenação faz a triagem, convida pessoas e pactua decisões. A administração gerencia perfis nas duas instituições.</p>
+    <p class="sm muted"><b style="color:var(--ink);font-weight:600">Perfis de acesso.</b> Leitores veem tudo e comentam. Colaboradores criam, anexam, atribuem e encaminham a próxima ação. A coordenação faz a triagem, convida pessoas e pactua decisões. A administração gerencia perfis nas duas instituições.</p>
   </main>`;
 }
 
@@ -880,7 +891,7 @@ export function pagNotificacoes(S) {
   return `<main class="page" style="max-width:960px">
     ${cab({
       titulo: 'Avisos',
-      sub: 'Menções, passagens de vez, respostas de triagem, anexos e itens prontos para validação.',
+      sub: 'Menções, encaminhamentos, respostas de triagem, anexos e itens prontos para validação.',
       acoes: S.notif.some((n) => !n.lida) ? '<button type="button" class="btn" data-acao="ler-todas">Marcar todos como lidos</button>' : '',
     })}
     ${cartao('Seus avisos', ns.map((n) => {
@@ -956,6 +967,12 @@ export const acoes = {
     await S.api.excluirItem(x.id);
     location.hash = '#/quadro';
     return { recarregar: true, aviso: 'Item excluído.' };
+  },
+  async mover(S, el) {
+    const x = item(S, Number(el.dataset.id));
+    if (!x || x.fase === el.dataset.fase) return {};
+    await S.api.atualizarItem(x.id, { fase: el.dataset.fase });
+    return { recarregar: true, aviso: `“${x.titulo.length > 50 ? x.titulo.slice(0, 48) + '…' : x.titulo}” movido para ${FASE[el.dataset.fase]}.` };
   },
   async imprimir() { window.print(); return { semRender: true }; },
   async 'filtro-frente'(S, el) {
@@ -1107,7 +1124,7 @@ export const formularios = {
       ? { vez_instituicao: val, vez_membro_id: null, vez_nota: txt(fd, 'nota') }
       : { vez_instituicao: membro(S, val).instituicao_id, vez_membro_id: val, vez_nota: txt(fd, 'nota') };
     await S.api.atualizarItem(Number(form.dataset.id), patch);
-    return { recarregar: true, aviso: 'A vez foi passada e a pessoa foi avisada.' };
+    return { recarregar: true, aviso: 'Próxima ação encaminhada. A pessoa foi avisada.' };
   },
   async ajustar(S, fd, form) {
     const id = Number(form.dataset.id);
