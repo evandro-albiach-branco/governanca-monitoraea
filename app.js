@@ -1,13 +1,14 @@
 // Inicialização, rotas e despacho de ações.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261016c';
-import { criarBackendDemo } from './dados-demo.js?v=20261016c';
-import * as P from './paginas.js?v=20261016c';
-import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261016c';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261016e';
+import { criarBackendDemo } from './dados-demo.js?v=20261016e';
+import * as P from './paginas.js?v=20261016e';
+import { pagSintese } from './sintese.js?v=20261016e';
+import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261016e';
 
 const raiz = document.getElementById('app');
 const S = {
   api: null, eu: null, d: null, notif: [],
-  rota: '', params: {}, filtros: { frente: 'todas', origem: 'todas', q: '', triagem: 'recebidas', equipe: 'todas', notif: 'todas', github: 'avaliar' },
+  rota: '', params: {}, filtros: { frente: 'todas', origem: 'todas', q: '', triagem: 'recebidas', equipe: 'todas', notif: 'todas', github: 'avaliar', sintese: '30' },
   abaAcesso: 'entrar', ultimoConvite: null,
   pend: {},          // anexos aguardando envio, por alvo ('cm:12', 'novo')
   rec: null,         // gravação de áudio em andamento
@@ -87,6 +88,7 @@ async function render(opcoes = {}) {
     S.rota = rota; S.params = params;
     const paginas = {
       painel: () => P.pagPainel(S),
+      sintese: () => pagSintese(S),
       quadro: () => P.pagQuadro(S),
       triagem: () => P.pagTriagem(S),
       item: () => P.pagItem(S, params.id),
@@ -96,7 +98,7 @@ async function render(opcoes = {}) {
       notificacoes: () => P.pagNotificacoes(S),
       github: () => (S.d.githubAtivo && podeGithub(S.eu) ? P.pagGithub(S) : P.pagPainel(S)),
     };
-    const titulos = { painel: 'Painel', quadro: 'Quadro', triagem: 'Triagem', item: 'Item', novo: 'Novo registro', decisoes: 'Decisões', equipe: 'Equipe', notificacoes: 'Avisos', github: 'GitHub' };
+    const titulos = { painel: 'Painel', sintese: 'Síntese', quadro: 'Quadro', triagem: 'Triagem', item: 'Item', novo: 'Novo registro', decisoes: 'Decisões', equipe: 'Equipe', notificacoes: 'Avisos', github: 'GitHub' };
     const guardados = opcoes.preservar && !mudouRota ? lerCampos() : null;
     const conteudo = await (paginas[rota] || paginas.painel)();
     const y = window.scrollY;
@@ -219,7 +221,7 @@ window.addEventListener('beforeunload', (ev) => {
 async function iniciar() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261016c');
+      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261016e');
       S.api = criarBackendSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
     } else {
       S.api = criarBackendDemo();

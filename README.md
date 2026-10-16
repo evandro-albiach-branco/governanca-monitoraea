@@ -14,6 +14,7 @@ Se a plataforma já está no ar, com contas e dados, **não rode o `schema.sql` 
 
 1. No SQL Editor do Supabase, rode **`anexos.sql`**. Ele só acrescenta a tabela de anexos, o espaço de arquivos (bucket `anexos`) e as regras de acesso; não apaga nada e pode ser rodado mais de uma vez.
    Para a integração com o GitHub, rode também **`github.sql`** (também só acrescenta) e siga a seção 7.
+   Para editar e excluir itens, rode **`editar-excluir.sql`**; para os destaques da Síntese, rode **`sintese.sql`**. Os dois só acrescentam.
 2. No GitHub, envie os arquivos novos por cima dos antigos (*Add file → Upload files*, selecionando todos de uma vez). **Não substitua o `config.js`**, que já tem as suas chaves.
 3. Recarregue o site com Ctrl + Shift + R.
 
@@ -114,6 +115,9 @@ schema.sql             instalação completa: tabelas, regras, gatilhos, funçõ
 primeiro-convite.sql   convite da primeira pessoa administradora
 anexos.sql             acrescenta anexos a uma instalação existente (não apaga nada)
 github.sql             acrescenta a integração com as issues do GitHub (não apaga nada)
+editar-excluir.sql     edição completa e exclusão de itens (não apaga nada)
+sintese.sql            destaques (★) usados na Síntese (não apaga nada)
+sintese.js             página Síntese (dashboard)
 governanca-monitoraea.yml  automação que vai no repositório das issues (seção 7)
 00-limpar.sql          remove a plataforma do banco (apaga os dados)
 ```
@@ -195,3 +199,20 @@ A página fica num acesso discreto no pé do menu (*Issues · GitHub*). Só a eq
   - `segredo inválido`: o segredo do GitHub e o do passo 2 estão diferentes;
   - `não é o configurado`: o repositório informado no passo 2 está errado.
 - O segredo não fica no site. Se precisar trocá-lo, rode o passo 2 de novo com o novo segredo e atualize `GOVERNANCA_SEGREDO` no GitHub.
+
+## 8. Síntese
+
+A aba **Síntese** mostra o MonitoraEA em um olhar, calculado na hora a partir dos itens:
+
+- números de itens em aberto, entregues, atrasados e na triagem, com a tendência do período escolhido (7 dias, 30 dias ou trimestre);
+- onde está o trabalho (fases × instituição de origem) e quem originou;
+- saúde de cada frente:
+  - **Crítico** quando há item atrasado;
+  - **Atenção** quando algo vence em até 7 dias ou está sem responsável;
+  - **No ritmo** nos demais casos;
+- linha do tempo dos destaques;
+- ritmo de entregas, itens que pedem atenção e pauta de decisões.
+
+A coordenação e a administração marcam itens com **★ Destacar**, na ficha do item, para que entrem na linha do tempo. Sem nenhum destaque marcado, a linha do tempo mostra os atrasados, os de prioridade alta e os de prazo próximo.
+
+O botão **Imprimir ou salvar PDF** gera uma versão limpa, sem menu, para levar a reuniões.

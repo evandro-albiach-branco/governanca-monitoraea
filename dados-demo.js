@@ -1,8 +1,8 @@
 // Modo demonstração: mesmos fluxos e regras do banco real, com dados de
 // exemplo guardados apenas neste navegador (localStorage).
-import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub, podeExcluirItem } from './util.js?v=20261016c';
+import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub, podeExcluirItem } from './util.js?v=20261016e';
 
-const CHAVE = 'gov-monitoraea-demo-v3';
+const CHAVE = 'gov-monitoraea-demo-v4';
 const REPO_DEMO = 'ladis-inpe/monitoraea';
 const CHAVE_EU = 'gov-monitoraea-demo-eu';
 
@@ -42,7 +42,7 @@ function semente() {
 
   const I = (o) => ({
     descricao: '', modulo: '', envolvidas: [], prioridade: 'media', vez_nota: null, instrumento: null,
-    concluido_em: null, github_repo: null, github_numero: null, github_url: null, github_estado: null,
+    concluido_em: null, destaque: [6, 9, 11, 14, 15, 8].includes(o.id), github_repo: null, github_numero: null, github_url: null, github_estado: null,
     github_etiquetas: [], github_atribuidos: [], github_criado: false, github_sinc: null,
     ...o, criado_em: agoraMenos(o.idade ?? 10), atualizado_em: agoraMenos(o.mexido ?? 1),
   });
@@ -181,6 +181,10 @@ export function criarBackendDemo() {
   function aplicarItem(it, patch, silencio = false) {
     const antes = { ...it };
     if (perfil() !== 'administracao') { delete patch.origem; delete patch.criado_por; }
+    if ('destaque' in patch && !!patch.destaque !== !!it.destaque) {
+      if (!['coordenacao', 'administracao'].includes(perfil())) falha('Só a coordenação ou a administração marcam destaques.');
+      evento(it.id, 'destaque', patch.destaque ? 'Marcou como destaque' : 'Tirou dos destaques');
+    }
     if ('github_numero' in patch && (patch.github_numero || null) !== (it.github_numero || null)) {
       if (!podeGithub(eu())) falha('O vínculo com issues do GitHub é feito pela equipe do INPE.');
       const n = patch.github_numero || null;

@@ -5,12 +5,14 @@ import {
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
   LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub, podeExcluirItem,
-} from './util.js?v=20261016c';
+} from './util.js?v=20261016e';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
 const item = (S, id) => S.d.itens.find((i) => i.id === Number(id));
 const nomeDe = (S, id) => membro(S, id)?.nome || '—';
+// Destaques da Síntese: coordenação e administração
+const podeDestacar = (eu) => ['coordenacao', 'administracao'].includes(eu?.perfil);
 // Autor de um evento do histórico: eventos sem autor vêm da sincronização com o GitHub
 const autorAv = (S, ev, extra = '') => (ev.autor_id ? avatar(membro(S, ev.autor_id), extra)
   : `<span class="av gh ${extra}" title="GitHub" aria-hidden="true">${svg('issue', 15)}</span>`);
@@ -46,6 +48,8 @@ function stPrazo(it, sempre = true) {
 const opcoes = (pares, sel) => pares.map(([v, t]) => `<option value="${e(v)}"${v === sel ? ' selected' : ''}>${e(t)}</option>`).join('');
 
 const ICONE = {
+  sintese: '<path d="M4 20V11"></path><path d="M10 20V5"></path><path d="M16 20v-7"></path><path d="M21 20H3"></path>',
+  estrela: '<path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"></path>',
   envelope: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3.5 6.5 8.5 6.5 8.5-6.5"></path>',
   sair: '<path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3"></path><path d="M15 8l4 4-4 4"></path><path d="M19 12H9"></path>',
   cadeado: '<rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path>',
@@ -100,7 +104,7 @@ export function moldura(S, rota, conteudo) {
     <a class="brand" href="#/painel"><img src="${LOGO.MONITORAEA}" alt="MonitoraEA, página inicial"><span>Governança compartilhada</span></a>
     ${podeEditar(S.eu) ? `<a class="newbtn${rota === 'novo' ? ' on' : ''}" href="#/novo">${svg('mais', 16)}Novo registro</a>` : ''}
     <nav aria-label="Navegação principal">
-      ${nv('painel', 'Painel')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${nv('equipe', 'Equipe')}
+      ${nv('painel', 'Painel')}${nv('sintese', 'Síntese')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${nv('equipe', 'Equipe')}
     </nav>
     ${ghLink ? `<div class="ext-gh"><span class="ext-t">Desenvolvimento</span>${ghLink}</div>` : ''}
     <div class="foot">
@@ -475,7 +479,7 @@ export async function pagItem(S, id) {
       crumb: `<a href="#/quadro">Quadro</a> / ${e(TIPO[x.tipo])}`,
       titulo: e(x.titulo),
       tags: `${tag(x.origem, `Origem ${siglaDe(x.origem)}`)}<span class="tag ext">${e(FRENTE[x.frente])}</span>${x.modulo ? `<span class="tag ext">${e(x.modulo)}</span>` : ''}${x.instrumento ? `<span class="xs muted">${e(x.instrumento)}</span>` : ''}${stPrazo(x, false)}`,
-      acoes: `${editar ? `<a class="btn" href="#editar" data-acao="abrir-edicao">Editar</a>` : ''}${podeAtribuir(S, x) && !S.params.atribuir ? `<a class="btn" href="#/item/${x.id}/atribuir">Atribuir ${aAo(outra)} ${outra}</a>` : ''}`,
+      acoes: `${podeDestacar(S.eu) && 'destaque' in x ? `<button type="button" class="btn${x.destaque ? ' destaque' : ''}" data-acao="destaque" data-id="${x.id}" aria-pressed="${!!x.destaque}">${svg('estrela', 16)}${x.destaque ? 'Em destaque' : 'Destacar'}</button>` : ''}${editar ? `<a class="btn" href="#editar" data-acao="abrir-edicao">Editar</a>` : ''}${podeAtribuir(S, x) && !S.params.atribuir ? `<a class="btn" href="#/item/${x.id}/atribuir">Atribuir ${aAo(outra)} ${outra}</a>` : ''}`,
     })}
 
     <section class="card cp" aria-label="Fase">
@@ -952,6 +956,17 @@ export const acoes = {
     await S.api.excluirItem(x.id);
     location.hash = '#/quadro';
     return { recarregar: true, aviso: 'Item excluído.' };
+  },
+  async imprimir() { window.print(); return { semRender: true }; },
+  async 'filtro-frente'(S, el) {
+    Object.assign(S.filtros, { frente: el.dataset.valor, origem: 'todas', q: '' });
+    location.hash = '#/quadro';
+    return {};
+  },
+  async destaque(S, el) {
+    const x = item(S, Number(el.dataset.id));
+    await S.api.atualizarItem(x.id, { destaque: !x.destaque });
+    return { recarregar: true, aviso: x.destaque ? 'Item tirado dos destaques.' : 'Item marcado como destaque: ele aparece na linha do tempo da Síntese.' };
   },
   async copiar(S, el) {
     const t = el.dataset.texto || '';
