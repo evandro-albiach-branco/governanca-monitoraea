@@ -1,9 +1,9 @@
 // Inicialização, rotas e despacho de ações.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261016e';
-import { criarBackendDemo } from './dados-demo.js?v=20261016e';
-import * as P from './paginas.js?v=20261016e';
-import { pagSintese } from './sintese.js?v=20261016e';
-import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261016e';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261016g';
+import { criarBackendDemo } from './dados-demo.js?v=20261016g';
+import * as P from './paginas.js?v=20261016g';
+import { pagSintese } from './sintese.js?v=20261016g';
+import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261016g';
 
 const raiz = document.getElementById('app');
 const S = {
@@ -31,8 +31,8 @@ async function recarregar() {
 }
 
 function lerRota() {
-  const partes = (location.hash || '#/painel').replace(/^#\/?/, '').split('/');
-  const rota = partes[0] || 'painel';
+  const partes = (location.hash || '#/sintese').replace(/^#\/?/, '').split('/');
+  const rota = partes[0] || 'sintese';
   const params = {};
   if (rota === 'item') { params.id = partes[1]; params.atribuir = partes[2] === 'atribuir'; }
   return { rota, params };
@@ -81,7 +81,7 @@ async function render(opcoes = {}) {
       window.__appIniciou = true;
       return;
     }
-    if (rota === 'acesso') { location.replace('#/painel'); return; }
+    if (rota === 'acesso') { location.replace('#/sintese'); return; }
     if (!S.d) await recarregar();
     const mudouRota = rota !== S.rota || params.id !== S.params.id;
     if (mudouRota) S.linkAberto = null;
@@ -96,16 +96,16 @@ async function render(opcoes = {}) {
       decisoes: () => P.pagDecisoes(S),
       equipe: () => P.pagEquipe(S),
       notificacoes: () => P.pagNotificacoes(S),
-      github: () => (S.d.githubAtivo && podeGithub(S.eu) ? P.pagGithub(S) : P.pagPainel(S)),
+      github: () => (S.d.githubAtivo && podeGithub(S.eu) ? P.pagGithub(S) : pagSintese(S)),
     };
     const titulos = { painel: 'Painel', sintese: 'Síntese', quadro: 'Quadro', triagem: 'Triagem', item: 'Item', novo: 'Novo registro', decisoes: 'Decisões', equipe: 'Equipe', notificacoes: 'Avisos', github: 'GitHub' };
     const guardados = opcoes.preservar && !mudouRota ? lerCampos() : null;
-    const conteudo = await (paginas[rota] || paginas.painel)();
+    const conteudo = await (paginas[rota] || paginas.sintese)();
     const y = window.scrollY;
     raiz.innerHTML = P.moldura(S, rota, conteudo);
     window.__appIniciou = true;
     devolverCampos(guardados);
-    document.title = `${titulos[rota] || 'Painel'} · Governança MonitoraEA`;
+    document.title = `${titulos[rota] || 'Síntese'} · Governança MonitoraEA`;
     if (mudouRota) window.scrollTo(0, 0); else window.scrollTo(0, y);
     if (opcoes.foco) document.getElementById(opcoes.foco)?.focus();
     atualizarRelogio();
@@ -221,7 +221,7 @@ window.addEventListener('beforeunload', (ev) => {
 async function iniciar() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261016e');
+      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261016g');
       S.api = criarBackendSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
     } else {
       S.api = criarBackendDemo();

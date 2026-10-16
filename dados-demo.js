@@ -1,6 +1,6 @@
 // Modo demonstração: mesmos fluxos e regras do banco real, com dados de
 // exemplo guardados apenas neste navegador (localStorage).
-import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub, podeExcluirItem } from './util.js?v=20261016e';
+import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub, podeExcluirItem } from './util.js?v=20261016g';
 
 const CHAVE = 'gov-monitoraea-demo-v4';
 const REPO_DEMO = 'ladis-inpe/monitoraea';

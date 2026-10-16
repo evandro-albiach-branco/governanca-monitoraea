@@ -1,5 +1,5 @@
-// Síntese: o MonitoraEA em um olhar (dashboard calculado a partir dos itens).
-import { e, FRENTES, FASE, hojeISO, dataCurta, aberto } from './util.js?v=20261016e';
+// Síntese: página inicial, dashboard calculado a partir dos itens.
+import { e, FRENTES, FASE, hojeISO, dataCurta, aberto } from './util.js?v=20261016g';
 
 // Cores dos gráficos (validadas para daltonismo; o amarelo da ANPPEA ganha um tom mais escuro para marcas finas)
 const COR = { INPE: '#0077B8', ANPPEA: '#D8920C', CONJUNTA: '#7A5FB8', OUTRA: '#8A97A8' };
@@ -287,7 +287,7 @@ export function pagSintese(S) {
   const c = calcular(S, dias);
   const agora = new Date();
   return `<main class="page sx">
-    <div class="ph"><div class="txt"><h1>Síntese</h1><p class="sub">O MonitoraEA em um olhar · ${agora.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}, ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p></div>
+    <div class="ph"><div class="txt"><h1>Síntese</h1><p class="sub">Desenvolvimento e operação do MonitoraEA, INPE e ANPPEA · dados de ${agora.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}, ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p></div>
       <div class="acoes-ph sx-noprint">
         <div class="seg" role="group" aria-label="Período">${[[7, '7 dias'], [30, '30 dias'], [90, 'Trimestre']].map(([v, n]) => `<button type="button" class="${dias === v ? 'on' : ''}" aria-pressed="${dias === v}" data-acao="filtro" data-chave="sintese" data-valor="${v}">${n}</button>`).join('')}</div>
         <button type="button" class="btn" data-acao="imprimir">Imprimir ou salvar PDF</button>

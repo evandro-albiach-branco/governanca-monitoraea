@@ -5,7 +5,7 @@ import {
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
   LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub, podeExcluirItem,
-} from './util.js?v=20261016e';
+} from './util.js?v=20261016g';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
@@ -101,10 +101,10 @@ export function moldura(S, rota, conteudo) {
   const nv = (r, t, n = 0, quente = false) => `<a class="nv${ativa === r ? ' on' : ''}" href="#/${r}"${ativa === r ? ' aria-current="page"' : ''}>${svg(r)}${t}${n ? `<span class="ct${quente ? ' hot' : ''}">${n}</span>` : ''}</a>`;
   return `<div class="app">
   <aside class="side" aria-label="Menu">
-    <a class="brand" href="#/painel"><img src="${LOGO.MONITORAEA}" alt="MonitoraEA, página inicial"><span>Governança compartilhada</span></a>
+    <a class="brand" href="#/sintese"><img src="${LOGO.MONITORAEA}" alt="MonitoraEA, página inicial"><span>Governança compartilhada</span></a>
     ${podeEditar(S.eu) ? `<a class="newbtn${rota === 'novo' ? ' on' : ''}" href="#/novo">${svg('mais', 16)}Novo registro</a>` : ''}
     <nav aria-label="Navegação principal">
-      ${nv('painel', 'Painel')}${nv('sintese', 'Síntese')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${nv('equipe', 'Equipe')}
+      ${nv('sintese', 'Síntese')}${nv('painel', 'Painel')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${nv('equipe', 'Equipe')}
     </nav>
     ${ghLink ? `<div class="ext-gh"><span class="ext-t">Desenvolvimento</span>${ghLink}</div>` : ''}
     <div class="foot">
@@ -939,7 +939,7 @@ export async function receberGravacao(S, alvo, blob, duracao) {
 
 // ------------------------------------------------------------------ ações (cliques)
 export const acoes = {
-  async 'entrar-como'(S, el) { S.eu = await S.api.entrarComo(el.dataset.id); location.hash = '#/painel'; return { recarregar: true }; },
+  async 'entrar-como'(S, el) { S.eu = await S.api.entrarComo(el.dataset.id); location.hash = '#/sintese'; return { recarregar: true }; },
   async 'trocar-pessoa'(S) { await S.api.sair(); S.eu = null; S.pend = {}; location.hash = '#/acesso'; return {}; },
   async 'reiniciar-demo'(S) { S.api.reiniciarDemo(); return { recarregar: true, aviso: 'Exemplos restaurados.' }; },
   async sair(S) { await S.api.sair(); S.eu = null; S.pend = {}; location.hash = '#/acesso'; return {}; },
@@ -1042,11 +1042,11 @@ export const acoes = {
 const txt = (fd, k) => (fd.get(k) || '').toString().trim();
 
 export const formularios = {
-  async entrar(S, fd) { S.eu = await S.api.entrar(txt(fd, 'email'), fd.get('senha')); location.hash = '#/painel'; return { recarregar: true }; },
+  async entrar(S, fd) { S.eu = await S.api.entrar(txt(fd, 'email'), fd.get('senha')); location.hash = '#/sintese'; return { recarregar: true }; },
   async cadastrar(S, fd) {
     const r = await S.api.cadastrar({ codigo: txt(fd, 'codigo'), nome: txt(fd, 'nome'), email: txt(fd, 'email'), senha: fd.get('senha') });
     if (r.confirmar) { S.abaAcesso = 'entrar'; return { aviso: 'Conta criada. Confirme o e-mail pelo link recebido e depois entre.' }; }
-    S.eu = r.membro; location.hash = '#/painel';
+    S.eu = r.membro; location.hash = '#/sintese';
     return { recarregar: true, aviso: 'Bem-vindo à plataforma.' };
   },
   async buscar(S, fd) { S.filtros.q = txt(fd, 'q'); S.filtros.frente = 'todas'; S.filtros.origem = 'todas'; location.hash = '#/quadro'; return {}; },
