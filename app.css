@@ -206,7 +206,7 @@ details > summary::-webkit-details-marker { display: none; }
 .form { display: flex; flex-direction: column; gap: 14px; }
 .f { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .f > label, .f > .t { font-size: 13px; font-weight: 500; }
-input[type=text], input[type=email], input[type=password], input[type=date], input[type=url], input[type=search], select, textarea {
+input[type=text], input[type=email], input[type=password], input[type=date], input[type=number], input[type=url], input[type=search], select, textarea {
   border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; min-height: 42px; background: #fff; width: 100%; color: var(--ink); font-size: 14px;
 }
 textarea { padding: 10px 12px; resize: vertical; }

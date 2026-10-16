@@ -129,6 +129,8 @@ export function logoInst(inst, h = 18) {
 export const podeEditar = (m) => !!m && m.perfil !== 'leitor';
 export const ehAdmin = (m) => m?.perfil === 'administracao';
 export const coordenaDe = (m, inst) => ehAdmin(m) || (m?.perfil === 'coordenacao' && m.instituicao_id === inst);
+// Excluir: a administração ou quem registrou o item
+export const podeExcluirItem = (m, it) => !!m && (ehAdmin(m) || (it.criado_por === m.id && podeEditar(m)));
 export function podeEditarItem(m, it) {
   if (!podeEditar(m)) return false;
   return ehAdmin(m) || it.origem === m.instituicao_id || it.origem === 'CONJUNTA'

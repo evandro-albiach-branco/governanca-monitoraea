@@ -1,6 +1,6 @@
 // Modo demonstração: mesmos fluxos e regras do banco real, com dados de
 // exemplo guardados apenas neste navegador (localStorage).
-import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub } from './util.js?v=20261016a';
+import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub, podeExcluirItem } from './util.js?v=20261016c';
 
 const CHAVE = 'gov-monitoraea-demo-v3';
 const REPO_DEMO = 'ladis-inpe/monitoraea';
@@ -219,6 +219,9 @@ export function criarBackendDemo() {
       evento(it.id, 'responsavel', 'Responsável: ' + (membro(it.responsavel_id)?.nome || 'ninguém'));
       if (!silencio) notificar([it.responsavel_id], it.id, 'responsavel', 'Você é responsável por: ' + it.titulo);
     }
+    const mud = [['titulo', 'título'], ['descricao', 'descrição'], ['tipo', 'tipo'], ['frente', 'frente'], ['modulo', 'módulo'], ['instrumento', 'instrumento']]
+      .filter(([k]) => k in patch && (it[k] || null) !== (antes[k] || null)).map(([, t]) => t);
+    if (mud.length) evento(it.id, 'edicao', 'Editou ' + mud.join(', '));
     if (it.prazo !== antes.prazo) {
       evento(it.id, 'prazo', 'Prazo: ' + (it.prazo ? it.prazo.split('-').reverse().join('/') : 'sem prazo'));
     }
@@ -313,6 +316,14 @@ export function criarBackendDemo() {
       aplicarItem(it, { ...patch });
       salvar();
       return copia(it);
+    },
+    async excluirItem(id) {
+      const it = db.itens.find((x) => x.id === id);
+      if (!it || !podeExcluirItem(eu(), it)) falha('Só a administração ou quem registrou o item pode excluí-lo.');
+      db.itens = db.itens.filter((x) => x.id !== id);
+      for (const k of ['comentarios', 'eventos', 'notificacoes', 'anexos', 'atribuicoes']) db[k] = db[k].filter((x) => x.item_id !== id);
+      db.decisoes.forEach((d) => { if (d.item_id === id) d.item_id = null; });
+      salvar();
     },
     async atribuir(itemId, a) { inserirAtribuicao(itemId, a); salvar(); },
     async responder(id, acao, { responsavel = null, prazo = null, texto = null } = {}) {

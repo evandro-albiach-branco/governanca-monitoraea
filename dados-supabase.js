@@ -116,6 +116,14 @@ export function criarBackendSupabase(url, chave) {
       if (!r.length) throw new Error('Seu perfil não permite alterar este item.');
       return r[0];
     },
+    async excluirItem(id) {
+      const anx = await sb.from('anexos').select('caminho').eq('item_id', id);
+      const r = ok(await sb.from('itens').delete().eq('id', id).select('id'));
+      if (!r.length) throw new Error('Só a administração ou quem registrou o item pode excluí-lo.');
+      // arquivos no Storage: remoção de melhor esforço (o registro já foi apagado)
+      const caminhos = (anx.data || []).map((a) => a.caminho).filter(Boolean);
+      if (caminhos.length) await sb.storage.from('anexos').remove(caminhos);
+    },
     async atribuir(itemId, atribuicao) {
       ok(await sb.from('atribuicoes').insert({
         ...atribuicao, item_id: itemId, de_instituicao: euCache.instituicao_id, criado_por: euCache.id,

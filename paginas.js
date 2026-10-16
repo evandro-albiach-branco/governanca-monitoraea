@@ -4,8 +4,8 @@ import {
   e, FASES, FASE, FRENTES, FRENTE, TIPO, PRIORIDADE, PERFIL, SIT_ATRIB, PARCEIRAS, LOGO,
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
-  LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub,
-} from './util.js?v=20261016a';
+  LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub, podeExcluirItem,
+} from './util.js?v=20261016c';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
@@ -475,7 +475,7 @@ export async function pagItem(S, id) {
       crumb: `<a href="#/quadro">Quadro</a> / ${e(TIPO[x.tipo])}`,
       titulo: e(x.titulo),
       tags: `${tag(x.origem, `Origem ${siglaDe(x.origem)}`)}<span class="tag ext">${e(FRENTE[x.frente])}</span>${x.modulo ? `<span class="tag ext">${e(x.modulo)}</span>` : ''}${x.instrumento ? `<span class="xs muted">${e(x.instrumento)}</span>` : ''}${stPrazo(x, false)}`,
-      acoes: podeAtribuir(S, x) && !S.params.atribuir ? `<a class="btn" href="#/item/${x.id}/atribuir">Atribuir ${aAo(outra)} ${outra}</a>` : '',
+      acoes: `${editar ? `<a class="btn" href="#editar" data-acao="abrir-edicao">Editar</a>` : ''}${podeAtribuir(S, x) && !S.params.atribuir ? `<a class="btn" href="#/item/${x.id}/atribuir">Atribuir ${aAo(outra)} ${outra}</a>` : ''}`,
     })}
 
     <section class="card cp" aria-label="Fase">
@@ -552,15 +552,22 @@ export async function pagItem(S, id) {
           <dt>Prazo</dt><dd>${x.prazo ? dataLonga(x.prazo) : '—'}</dd>
           <dt>Registrado</dt><dd>${dataLonga(x.criado_em)}, por ${e(nomeDe(S, x.criado_por))}</dd>
         </dl>
-        ${editar ? `<details style="padding:0 20px 18px"><summary class="btn sm">Editar detalhes</summary>
+        ${editar ? `<details id="editar" style="padding:0 20px 18px"><summary class="btn sm">Editar</summary>
           <form class="form" data-form="ajustar" data-id="${x.id}" style="margin-top:14px">
+            <div class="f"><label for="aj-tit">Título</label><textarea id="aj-tit" name="titulo" rows="2" required minlength="3">${e(x.titulo)}</textarea>${x.github_criado ? '<span class="hint">Este item acompanha a issue do GitHub: mudanças no título e na descrição feitas aqui são substituídas quando a issue for editada.</span>' : ''}</div>
+            <div class="f"><label for="aj-desc">Descrição</label><textarea id="aj-desc" name="descricao" rows="4">${e(x.descricao || '')}</textarea></div>
+            <div class="f"><label for="aj-tipo">Tipo</label><select id="aj-tipo" name="tipo">${opcoes(Object.entries(TIPO), x.tipo)}</select></div>
+            <div class="f"><label for="aj-fr">Frente</label><select id="aj-fr" name="frente">${opcoes(Object.entries(FRENTE), x.frente)}</select></div>
+            <div class="f"><label for="aj-mod">Módulo</label><input id="aj-mod" name="modulo" type="text" value="${e(x.modulo || '')}"></div>
+            <div class="f"><label for="aj-ins">Instrumento ou processo</label><input id="aj-ins" name="instrumento" type="text" value="${e(x.instrumento || '')}" placeholder="Ex.: Processo SEI nº …"></div>
             <div class="f"><label for="aj-resp">Responsável</label><select id="aj-resp" name="responsavel"><option value="">A definir</option>${opcoes(ativos(S).filter((m) => PARCEIRAS.includes(m.instituicao_id) && m.perfil !== 'leitor').map((m) => [m.id, `${m.nome} (${siglaDe(m.instituicao_id)})`]), x.responsavel_id)}</select></div>
             <div class="f"><label for="aj-pz">Prazo</label><input id="aj-pz" name="prazo" type="date" value="${e(x.prazo || '')}"></div>
             <div class="f"><label for="aj-pr">Prioridade</label><select id="aj-pr" name="prioridade">${opcoes(Object.entries(PRIORIDADE), x.prioridade)}</select></div>
             ${S.d.githubAtivo && podeGithub(S.eu) ? `<div class="f"><label for="aj-gh">Issue do GitHub (número)</label><input id="aj-gh" name="github_numero" type="number" min="1" step="1" inputmode="numeric" value="${e(x.github_numero || '')}" placeholder="Ex.: 42"><span class="hint">Deixe em branco para desfazer o vínculo.</span></div>` : ''}
             <div class="f"><span class="t">Instituições envolvidas</span><div style="display:flex;gap:6px;flex-wrap:wrap">${S.d.instituicoes.map((i) => `<label class="ck"><input type="checkbox" name="envolvidas" value="${e(i.id)}"${(x.envolvidas || []).includes(i.id) ? ' checked' : ''}>${e(i.sigla)}</label>`).join('')}</div></div>
             <button class="btn sm pri" type="submit">Salvar</button>
-          </form></details>` : ''}`)}
+          </form></details>` : ''}
+        ${podeExcluirItem(S.eu, x) ? `<div style="padding:0 20px 18px"><button type="button" class="lnk perigo" data-acao="excluir-item" data-id="${x.id}">Excluir este item</button></div>` : ''}`)}
         ${x.github_numero ? cartao('GitHub', `<div class="cp ghbox">
           <a class="ghnum" href="${e(linkSeguro(x.github_url) || '#')}" target="_blank" rel="noopener">${svg('issue', 16)}Issue #${x.github_numero}</a>
           ${x.github_estado ? `<span class="st ${GH_ESTADO[x.github_estado][1]}">${e(GH_ESTADO[x.github_estado][0])}</span>` : '<span class="xs muted">Estado chega na próxima sincronização</span>'}
@@ -933,6 +940,19 @@ export const acoes = {
   async 'reiniciar-demo'(S) { S.api.reiniciarDemo(); return { recarregar: true, aviso: 'Exemplos restaurados.' }; },
   async sair(S) { await S.api.sair(); S.eu = null; S.pend = {}; location.hash = '#/acesso'; return {}; },
   async 'aba-acesso'(S, el) { S.abaAcesso = el.dataset.aba; return {}; },
+  async 'abrir-edicao'() {
+    const d = document.getElementById('editar');
+    if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); setTimeout(() => document.getElementById('aj-tit')?.focus(), 300); }
+    return { semRender: true };
+  },
+  async 'excluir-item'(S, el) {
+    const x = item(S, Number(el.dataset.id));
+    if (!x) return {};
+    if (!confirm(`Excluir “${x.titulo}”?\n\nO item some do Quadro junto com os comentários, anexos, atribuições e o histórico. Isso não pode ser desfeito.\n\nSe a ideia é só tirá-lo de circulação, use “Arquivar”.`)) return {};
+    await S.api.excluirItem(x.id);
+    location.hash = '#/quadro';
+    return { recarregar: true, aviso: 'Item excluído.' };
+  },
   async copiar(S, el) {
     const t = el.dataset.texto || '';
     try {
@@ -1076,7 +1096,11 @@ export const formularios = {
   },
   async ajustar(S, fd, form) {
     const id = Number(form.dataset.id);
+    const titulo = txt(fd, 'titulo');
+    if (titulo.length < 3) throw new Error('O título precisa ter pelo menos 3 caracteres.');
     const patch = {
+      titulo, descricao: txt(fd, 'descricao') || null, tipo: txt(fd, 'tipo'), frente: txt(fd, 'frente'),
+      modulo: txt(fd, 'modulo') || null, instrumento: txt(fd, 'instrumento') || null,
       responsavel_id: txt(fd, 'responsavel') || null, prazo: txt(fd, 'prazo') || null,
       prioridade: txt(fd, 'prioridade'), envolvidas: fd.getAll('envolvidas'),
     };
@@ -1086,7 +1110,7 @@ export const formularios = {
       if (n !== (item(S, id)?.github_numero || null)) patch.github_numero = n;
     }
     await S.api.atualizarItem(id, patch);
-    return { recarregar: true, aviso: 'Detalhes salvos.' };
+    return { recarregar: true, aviso: 'Alterações salvas.' };
   },
   async comentar(S, fd, form) {
     if (S.rec) throw new Error('Termine a gravação do áudio antes de publicar.');
