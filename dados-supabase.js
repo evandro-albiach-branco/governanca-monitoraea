@@ -64,7 +64,7 @@ export function criarBackendSupabase(url, chave) {
     },
 
     async carregar() {
-      const [inst, mem, itens, atr, dec, evt, anx, ghi] = await Promise.all([
+      const [inst, mem, itens, atr, dec, evt, anx, ghi, fpr] = await Promise.all([
         sb.from('instituicoes').select('*').order('ordem'),
         sb.from('membros').select('*').order('nome'),
         sb.from('itens').select('*').order('atualizado_em', { ascending: false }),
@@ -73,6 +73,7 @@ export function criarBackendSupabase(url, chave) {
         sb.from('eventos').select('*').order('criado_em', { ascending: false }).limit(15),
         sb.from('anexos').select('item_id'),
         sb.from('github_issues').select('*').order('atualizada_em', { ascending: false, nullsFirst: false }),
+        sb.from('formacao_versoes').select('id, resumo').order('criado_em', { ascending: false }).order('id', { ascending: false }).limit(1),
       ]);
       const anexosPorItem = {};
       // Se a migração de anexos ainda não foi rodada, a plataforma segue funcionando sem eles.
@@ -84,7 +85,37 @@ export function criarBackendSupabase(url, chave) {
         // Se github.sql ainda não foi rodado, a integração fica escondida.
         githubAtivo: !ghi.error,
         githubIssues: ghi.error ? [] : ghi.data,
+        // Se formacoes.sql ainda não foi rodado, a página Formações explica o que falta.
+        formacoesAtivo: !fpr.error,
+        // inconsistências da versão publicada (contadas no navegador de quem publicou ou corrigiu)
+        formacoesAlertas: fpr.error ? null : (fpr.data[0]?.resumo?.alertas || null),
       };
+    },
+    // ---- Formações
+    async formacoes() {
+      const [ult, vs, pr] = await Promise.all([
+        sb.from('formacao_versoes').select('*').order('criado_em', { ascending: false }).order('id', { ascending: false }).limit(1),
+        sb.from('formacao_versoes').select('id, criado_em, criado_por, arquivo, nota, resumo, restaurada_de').order('criado_em', { ascending: false }).order('id', { ascending: false }).limit(50),
+        sb.from('formacao_processos').select('*'),
+      ]);
+      if (ult.error && /formacao_versoes|relation|does not exist|schema cache/i.test(ult.error.message)) {
+        throw new Error('A página Formações precisa da migração formacoes.sql. Peça à administração para rodá-la no Supabase.');
+      }
+      const meta = {};
+      ok(pr).forEach((p) => { meta[p.cod] = { realizacao: p.realizacao, item_id: p.item_id }; });
+      return { versao: ok(ult)[0] || null, versoes: ok(vs), meta };
+    },
+    async formacaoPublicar(dados, arquivo, nota, resumo) {
+      return ok(await sb.rpc('formacao_publicar', { p_dados: dados, p_arquivo: arquivo || null, p_nota: nota || null, p_resumo: resumo || {} }));
+    },
+    async formacaoCorrigir(cod, campos, nota, resumo) {
+      return ok(await sb.rpc('formacao_processo_corrigir', { p_cod: cod, p_campos: campos, p_nota: nota || null, p_resumo: resumo || null }));
+    },
+    async formacaoRestaurar(id) {
+      return ok(await sb.rpc('formacao_restaurar', { p_versao: id }));
+    },
+    async formacaoProcesso(cod, realizacao, item) {
+      ok(await sb.rpc('formacao_processo_definir', { p_cod: cod, p_realizacao: realizacao || null, p_item: item || null }));
     },
     async githubAdicionar(numero, origem, frente) {
       return ok(await sb.rpc('github_adicionar', { p_numero: numero, p_origem: origem, p_frente: frente || null }));

@@ -5,7 +5,7 @@ import {
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
   LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub, podeExcluirItem,
-} from './util.js?v=20261016h';
+} from './util.js?v=20261108b';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
@@ -57,6 +57,7 @@ const ICONE = {
   github: '<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor"></circle>',
   issue: '<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="1.8" fill="currentColor"></circle>',
   painel: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path>',
+  formacoes: '<path d="M2 9.5 12 5l10 4.5-10 4.5z"></path><path d="M6 11.5V16c0 1.4 2.7 3 6 3s6-1.6 6-3v-4.5"></path><path d="M22 9.5V15"></path>',
   quadro: '<rect x="3" y="4" width="5" height="16" rx="1.5"></rect><rect x="10" y="4" width="5" height="11" rx="1.5"></rect><rect x="17" y="4" width="4" height="7" rx="1.5"></rect>',
   triagem: '<path d="M3 13h5l2 3h4l2-3h5"></path><path d="M5 5h14l2 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"></path>',
   decisoes: '<rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="m8.5 12 2.5 2.5 4.5-5"></path>',
@@ -105,7 +106,7 @@ export function moldura(S, rota, conteudo) {
     <a class="brand" href="#/sintese"><img src="${LOGO.MONITORAEA}" alt="MonitoraEA, página inicial"><span>Governança compartilhada</span></a>
     ${podeEditar(S.eu) ? `<a class="newbtn${rota === 'novo' ? ' on' : ''}" href="#/novo">${svg('mais', 16)}Novo registro</a>` : ''}
     <nav aria-label="Navegação principal">
-      ${nv('sintese', 'Síntese')}${nv('painel', 'Painel')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${nv('equipe', 'Equipe')}
+      ${nv('sintese', 'Síntese')}${nv('painel', 'Painel')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${S.d.formacoesAtivo ? nv('formacoes', 'Formações', S.d.formacoesAlertas?.erros || 0, true) : ''}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${nv('equipe', 'Equipe')}
     </nav>
     ${ghLink ? `<div class="ext-gh"><span class="ext-t">Desenvolvimento</span>${ghLink}</div>` : ''}
     <div class="foot">

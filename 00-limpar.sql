@@ -7,7 +7,7 @@
 -- instalar ou reinstalar.
 -- ---------------------------------------------------------------------
 drop trigger if exists ao_criar_usuario on auth.users;
-drop table if exists public.github_issues, public.github_config, public.anexos, public.notificacoes, public.eventos, public.decisoes, public.comentarios,
+drop table if exists public.formacao_versoes, public.formacao_processos, public.github_issues, public.github_config, public.anexos, public.notificacoes, public.eventos, public.decisoes, public.comentarios,
   public.atribuicoes, public.itens, public.convites, public.membros, public.instituicoes cascade;
 do $limpa$
 declare r record;
@@ -21,7 +21,8 @@ begin
        'membros_de','sigla','rotulo_fase','sou_coordenacao_de','posso_editar','sou_membro',
        'meu_perfil','minha_instituicao','anexos_depois',
        'github_configurar','github_frente','github_sincronizar','itens_github_antes','itens_github_depois','definir_github',
-       'github_adicionar','github_ignorar','github_membro_atribuido','itens_edicao','itens_destaque','itens_fase_marca')
+       'github_adicionar','github_ignorar','github_membro_atribuido','itens_edicao','itens_destaque','itens_fase_marca',
+       'posso_formacao','formacao_limpar','formacao_limpar_processos','formacao_publicar','formacao_restaurar','formacao_processo_definir','formacao_processo_corrigir')
   loop
     execute 'drop function if exists ' || r.f::text || ' cascade';
   end loop;

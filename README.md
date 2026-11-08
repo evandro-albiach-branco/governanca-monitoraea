@@ -16,6 +16,7 @@ Se a plataforma já está no ar, com contas e dados, **não rode o `schema.sql` 
    Para a integração com o GitHub, rode também **`github.sql`** (também só acrescenta) e siga a seção 7.
    Para editar e excluir itens, rode **`editar-excluir.sql`**; para os destaques da Síntese, rode **`sintese.sql`**. Os dois só acrescentam.
    Para mover cards no Quadro e registrar as mudanças de coluna, rode **`quadro.sql`** (só acrescenta).
+   Para a página Formações, rode **`formacoes.sql`** (só acrescenta) e veja a seção 10.
 2. No GitHub, envie os arquivos novos por cima dos antigos (*Add file → Upload files*, selecionando todos de uma vez). **Não substitua o `config.js`**, que já tem as suas chaves.
 3. Recarregue o site com Ctrl + Shift + R.
 
@@ -120,6 +121,11 @@ editar-excluir.sql     edição completa e exclusão de itens (não apaga nada)
 sintese.sql            destaques (★) usados na Síntese (não apaga nada)
 quadro.sql             registro de mudança de coluna e coluna "Concluído" (não apaga nada)
 sintese.js             página Síntese (dashboard)
+formacoes.sql          dados de formação em versões, com filtro de privacidade (não apaga nada)
+formacoes.js           página Formações e atualização por planilha
+demo-formacoes.js      dados de exemplo de Formações (modo demonstração)
+malha-uf.json          malha oficial do IBGE (2025) das UF, pronta para o navegador
+malha-municipios.json  malha oficial do IBGE (2025) dos 5.570 municípios, pronta para o navegador
 governanca-monitoraea.yml  automação que vai no repositório das issues (seção 7)
 00-limpar.sql          remove a plataforma do banco (apaga os dados)
 ```
@@ -227,3 +233,26 @@ O botão **Imprimir ou salvar PDF** gera uma versão limpa, sem menu, para levar
   - Cada card mostra desde quando está na coluna e quem o moveu; a ficha do item guarda o histórico completo.
   - No celular, onde não dá para arrastar, a fase muda na ficha do item.
 - **Próxima ação (antigo "passar a vez"):** cada item aberto tem alguém (uma pessoa ou a coordenação de uma instituição) com quem está o próximo passo. Na ficha, o botão **Encaminhar** passa esse próximo passo a outra pessoa ou instituição, com uma nota do que precisa ser feito. Quem recebe é avisado e vê o item em *Esperando por você*, no Painel.
+
+## 10. Formações
+
+A página **Formações** mostra os processos formativos: processos, linha do tempo, setor das instituições, perfil de quem participa, mapas, cobertura e qualidade dos dados.
+
+- **Mapas:** usam a malha oficial do IBGE (Malha Municipal Digital 2025), simplificada para abrir rápido na web. Há dois recortes: **por UF** e **por município**, contando participações ou pessoas. Clicar numa UF filtra o painel e aproxima o mapa dos municípios dela.
+- **Município:** o mapa por município depende de uma coluna na planilha com o **código IBGE de 7 dígitos** (por exemplo, 3550308 para São Paulo). Códigos de 6 dígitos são completados automaticamente; códigos que não existem na malha aparecem em *Pontos para conferir*.
+- **Quem atualiza e corrige:** qualquer pessoa da plataforma, de qualquer instituição, exceto os perfis só de leitura.
+- **Atualizar por planilha:** **Atualizar dados** recebe a planilha de sempre (.xlsx, .xls ou .csv).
+  - A plataforma reconhece as colunas, mesmo com nomes um pouco diferentes, e deixa trocar qualquer uma que tenha errado.
+  - Antes de publicar, mostra o que muda no painel e as inconsistências encontradas.
+  - Cada publicação vira uma versão. As anteriores ficam no *Histórico de atualizações* e podem ser restauradas.
+- **Corrigir direto na plataforma:** em cada processo, **Editar** abre sigla, descrição, modalidade, início, fim, turmas, horas por turma, carga total, quem realiza e o item do Quadro.
+  - Enquanto se digita, a conta *turmas × horas* aparece ao lado da carga total. Quando não bate, o botão **Usar** preenche o total certo.
+  - Cada correção vira uma nova versão, com a nota do que foi corrigido. Para desfazer, basta restaurar a versão anterior.
+  - O item do Quadro ligado ao processo ganha um registro no histórico a cada correção ou atualização.
+- **Inconsistências:** a plataforma confere os dados sozinha, a cada publicação e a cada correção.
+  - **Erros** (em vermelho): carga total diferente de *turmas × horas*; processo que termina antes de começar; mesma pessoa duas vezes no mesmo processo; município de outra UF.
+  - **Avisos** (em amarelo): processo sem início ou sem carga; processo sem participações; participações de processo sem cadastro; região diferente da UF; mesma pessoa com gênero diferente; participantes sem UF ou sem município; instituição só como "OUTROS"; participantes sem e-mail.
+  - Os erros aparecem numa faixa no topo da página, com o botão **Corrigir**, e como número em vermelho em *Formações*, no menu, para todo mundo. A lista completa fica em *Qualidade dos dados*.
+- **Privacidade:** o banco guarda só códigos e atributos agregáveis (UF, município, região, gênero, setor, instituição, CIEA). Nomes, e-mails e telefones podem continuar na planilha, mas não são gravados: o navegador não os envia, e o banco descarta qualquer campo fora da lista.
+- **Leitura da planilha:** o leitor de planilhas (SheetJS) é carregado só nessa tela, a partir de cdn.jsdelivr.net.
+

@@ -1,14 +1,21 @@
 // Inicialização, rotas e despacho de ações.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261016h';
-import { criarBackendDemo } from './dados-demo.js?v=20261016h';
-import * as P from './paginas.js?v=20261016h';
-import { pagSintese } from './sintese.js?v=20261016h';
-import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261016h';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261108b';
+import { criarBackendDemo } from './dados-demo.js?v=20261108b';
+import * as P from './paginas.js?v=20261108b';
+import { pagSintese } from './sintese.js?v=20261108b';
+import * as F from './formacoes.js?v=20261108b';
+import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261108b';
+
+Object.assign(P.acoes, F.acoes);
+Object.assign(P.formularios, F.formularios);
 
 const raiz = document.getElementById('app');
 const S = {
   api: null, eu: null, d: null, notif: [],
-  rota: '', params: {}, filtros: { frente: 'todas', origem: 'todas', q: '', triagem: 'recebidas', equipe: 'todas', notif: 'todas', github: 'avaliar', sintese: '30' },
+  rota: '', params: {}, filtros: { frente: 'todas', origem: 'todas', q: '', triagem: 'recebidas', equipe: 'todas', notif: 'todas', github: 'avaliar', sintese: '30',
+    fproc: 'todos', fregiao: 'todas', fsetor: 'todos', fciea: 'todos', fuf: '', fq: '', fmapa: 'uf', fmed: 'part' },
+  form: null,        // dados de formação carregados
+  fimp: null,        // planilha de formação em conferência
   abaAcesso: 'entrar', ultimoConvite: null,
   pend: {},          // anexos aguardando envio, por alvo ('cm:12', 'novo')
   rec: null,         // gravação de áudio em andamento
@@ -35,6 +42,7 @@ function lerRota() {
   const rota = partes[0] || 'sintese';
   const params = {};
   if (rota === 'item') { params.id = partes[1]; params.atribuir = partes[2] === 'atribuir'; }
+  if (rota === 'formacoes' && partes[1] === 'atualizar') params.sub = 'atualizar';
   return { rota, params };
 }
 
@@ -83,8 +91,10 @@ async function render(opcoes = {}) {
     }
     if (rota === 'acesso') { location.replace('#/sintese'); return; }
     if (!S.d) await recarregar();
-    const mudouRota = rota !== S.rota || params.id !== S.params.id;
+    const mudouRota = rota !== S.rota || params.id !== S.params.id || params.sub !== S.params.sub;
     if (mudouRota) S.linkAberto = null;
+    // ao entrar em Formações, busca a versão mais recente dos dados
+    if (mudouRota && rota === 'formacoes' && !params.sub && S.rota !== 'formacoes') S.form = null;
     S.rota = rota; S.params = params;
     const paginas = {
       painel: () => P.pagPainel(S),
@@ -96,9 +106,10 @@ async function render(opcoes = {}) {
       decisoes: () => P.pagDecisoes(S),
       equipe: () => P.pagEquipe(S),
       notificacoes: () => P.pagNotificacoes(S),
+      formacoes: () => (params.sub === 'atualizar' ? F.pagFormacoesAtualizar(S) : F.pagFormacoes(S)),
       github: () => (S.d.githubAtivo && podeGithub(S.eu) ? P.pagGithub(S) : pagSintese(S)),
     };
-    const titulos = { painel: 'Painel', sintese: 'Síntese', quadro: 'Quadro', triagem: 'Triagem', item: 'Item', novo: 'Novo registro', decisoes: 'Decisões', equipe: 'Equipe', notificacoes: 'Avisos', github: 'GitHub' };
+    const titulos = { painel: 'Painel', sintese: 'Síntese', quadro: 'Quadro', triagem: 'Triagem', item: 'Item', novo: 'Novo registro', decisoes: 'Decisões', equipe: 'Equipe', notificacoes: 'Avisos', github: 'GitHub', formacoes: 'Formações' };
     const guardados = opcoes.preservar && !mudouRota ? lerCampos() : null;
     const conteudo = await (paginas[rota] || paginas.sintese)();
     const y = window.scrollY;
@@ -191,6 +202,20 @@ document.addEventListener('click', (ev) => {
 });
 
 document.addEventListener('change', (ev) => {
+  // Formações: filtros em lista, planilha enviada e ajustes de colunas
+  const sel = ev.target.closest('select[data-filtro]');
+  if (sel) { S.filtros[sel.dataset.filtro] = sel.value; executar(async () => ({}), true); return; }
+  const plan = ev.target.closest('input[type=file][data-fm-arquivo]');
+  if (plan) {
+    const arq = plan.files[0];
+    plan.value = '';
+    if (!arq) return;
+    aviso('Lendo a planilha…');
+    executar(() => F.receberPlanilha(S, arq), false);
+    return;
+  }
+  const col = ev.target.closest('select[data-fm-col], select[data-fm-aba]');
+  if (col) { F.mudarColuna(S, col); executar(async () => ({}), true); return; }
   const input = ev.target.closest('input[type=file][data-anexar]');
   if (!input || !input.files.length) return;
   const alvo = input.dataset.anexar;
@@ -198,6 +223,11 @@ document.addEventListener('change', (ev) => {
   input.value = '';
   if (alvo.startsWith('item:')) aviso(arquivos.length === 1 ? 'Enviando o arquivo…' : `Enviando ${arquivos.length} arquivos…`);
   executar(() => P.receberArquivos(S, alvo, arquivos, tipoDeMime), true);
+});
+
+// Formações: a conta de turmas × horas acompanha a digitação
+document.addEventListener('input', (ev) => {
+  if (ev.target.matches?.('input[data-fm-calc]')) F.atualizarConta(ev.target.closest('form'));
 });
 
 document.addEventListener('submit', (ev) => {
@@ -253,7 +283,7 @@ window.addEventListener('beforeunload', (ev) => {
 async function iniciar() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261016h');
+      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261108b');
       S.api = criarBackendSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
     } else {
       S.api = criarBackendDemo();
