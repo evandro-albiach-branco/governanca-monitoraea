@@ -1,10 +1,10 @@
 // Inicialização, rotas e despacho de ações.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261109e';
-import { criarBackendDemo } from './dados-demo.js?v=20261109e';
-import * as P from './paginas.js?v=20261109e';
-import { pagSintese } from './sintese.js?v=20261109e';
-import * as F from './formacoes.js?v=20261109e';
-import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261109e';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261109f';
+import { criarBackendDemo } from './dados-demo.js?v=20261109f';
+import * as P from './paginas.js?v=20261109f';
+import { pagSintese } from './sintese.js?v=20261109f';
+import * as F from './formacoes.js?v=20261109f';
+import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261109f';
 
 Object.assign(P.acoes, F.acoes);
 Object.assign(P.formularios, F.formularios);
@@ -290,7 +290,7 @@ window.addEventListener('beforeunload', (ev) => {
 async function iniciar() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261109e');
+      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261109f');
       S.api = criarBackendSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
     } else {
       S.api = criarBackendDemo();

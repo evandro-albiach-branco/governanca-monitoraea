@@ -104,14 +104,19 @@ export function criarBackendSupabase(url, chave) {
       const meta = {};
       ok(pr).forEach((p) => { meta[p.cod] = { realizacao: p.realizacao, item_id: p.item_id }; });
       // nomes e contatos: o banco só entrega a perfis de edição; vem em páginas de 1000
+      // o banco está com a última versão de formacoes.sql?
+      const ver = await sb.rpc('formacoes_versao');
+      const bancoDesatualizado = ver.error || ver.data !== '2026-11-09e' ? (ver.data || 'antiga') : null;
       const contatos = [];
+      let colunas = 'cod_pessoa, nome, email, telefone, autoriza_imagem, chaves';
       for (let de = 0; de < 200000; de += 1000) {
-        const r = await sb.from('formacao_contatos').select('cod_pessoa, nome, email, telefone, autoriza_imagem, chaves').order('cod_pessoa').range(de, de + 999);
+        let r = await sb.from('formacao_contatos').select(colunas).order('cod_pessoa').range(de, de + 999);
+        if (r.error && colunas.includes('chaves')) { colunas = 'cod_pessoa, nome, email, telefone'; r = await sb.from('formacao_contatos').select(colunas).order('cod_pessoa').range(de, de + 999); }
         if (r.error) break;   // tabela ainda não criada: segue sem nomes
         contatos.push(...r.data);
         if (r.data.length < 1000) break;
       }
-      return { versao: ok(ult)[0] || null, versoes: ok(vs), meta, contatos };
+      return { versao: ok(ult)[0] || null, versoes: ok(vs), meta, contatos, bancoDesatualizado };
     },
     async formacaoPublicar(dados, arquivo, nota, resumo, contatos) {
       return ok(await sb.rpc('formacao_publicar', { p_dados: dados, p_arquivo: arquivo || null, p_nota: nota || null, p_resumo: resumo || {}, p_contatos: contatos && contatos.length ? contatos : null }));

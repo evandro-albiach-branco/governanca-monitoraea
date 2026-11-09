@@ -314,3 +314,11 @@ begin
 end $$;
 revoke execute on function public.formacao_contato_salvar(text, text, text, text) from public, anon;
 grant execute on function public.formacao_contato_salvar(text, text, text, text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Versão desta migração. O site confere e avisa quando o banco está
+-- desatualizado (quando este arquivo ainda não foi rodado de novo).
+-- ---------------------------------------------------------------------
+create or replace function public.formacoes_versao() returns text
+language sql immutable as $$ select '2026-11-09e'::text $$;
+grant execute on function public.formacoes_versao() to authenticated;

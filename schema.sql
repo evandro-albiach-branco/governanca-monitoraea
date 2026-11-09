@@ -29,7 +29,7 @@ begin
        'meu_perfil','minha_instituicao','anexos_depois',
        'github_configurar','github_frente','github_sincronizar','itens_github_antes','itens_github_depois','definir_github',
        'github_adicionar','github_ignorar','github_membro_atribuido','itens_edicao','itens_destaque','itens_fase_marca',
-       'posso_formacao','formacao_limpar','formacao_limpar_processos','formacao_publicar','formacao_restaurar','formacao_processo_definir','formacao_processo_corrigir','formacao_contato_salvar')
+       'posso_formacao','formacao_limpar','formacao_limpar_processos','formacao_publicar','formacao_restaurar','formacao_processo_definir','formacao_processo_corrigir','formacao_contato_salvar','formacoes_versao')
   loop
     execute 'drop function if exists ' || r.f::text || ' cascade';
   end loop;
@@ -1525,3 +1525,11 @@ begin
 end $$;
 revoke execute on function public.formacao_contato_salvar(text, text, text, text) from public, anon;
 grant execute on function public.formacao_contato_salvar(text, text, text, text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Versão desta migração. O site confere e avisa quando o banco está
+-- desatualizado (quando este arquivo ainda não foi rodado de novo).
+-- ---------------------------------------------------------------------
+create or replace function public.formacoes_versao() returns text
+language sql immutable as $$ select '2026-11-09e'::text $$;
+grant execute on function public.formacoes_versao() to authenticated;

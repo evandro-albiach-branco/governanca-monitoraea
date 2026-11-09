@@ -1,9 +1,12 @@
 // Formações: painel dos processos formativos e atualização por planilha.
 // Os mapas usam a malha oficial do IBGE (Malha Municipal Digital 2025), já simplificada
 // e convertida em caminhos SVG nos arquivos malha-uf.json e malha-municipios.json.
-import { e, dataLonga, dataCurta, quando, siglaDe, podeEditar } from './util.js?v=20261109e';
+import { e, dataLonga, dataCurta, quando, siglaDe, podeEditar } from './util.js?v=20261109f';
 
-const V = '20261109e';
+const V = '20261109f';
+// banco desatualizado: formacoes.sql não foi rodado de novo depois da última atualização do site
+const avisoBanco = (S) => (S.form?.bancoDesatualizado ? `<div class="fm-alerta" role="alert">${icone('er')}<div style="flex:1;min-width:0"><b>O banco de dados ainda não recebeu a última atualização</b>
+  <div>O site já está na versão nova, mas o Supabase não. Sem isso, nomes, contatos e o envio de listas não funcionam direito. No Supabase, abra <b>SQL Editor</b>, cole o arquivo <b>formacoes.sql</b> (do GitHub) e clique em <b>Run</b>. Ele não apaga nada. Depois, recarregue esta página.</div></div></div>` : '');
 const XLSX_URL = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
 
 // ------------------------------------------------------------------ constantes
@@ -247,7 +250,7 @@ export async function pagFormacoes(S) {
   const cab = `<div class="ph"><div class="txt"><h1>Formações</h1><p class="sub">Processos formativos do MonitoraEA e parceiros: quem participou, onde e com que carga horária</p></div>
     <div class="acoes-ph">${pode ? '<a class="btn" href="#/formacoes/pessoas">Encontrar pessoas</a>' : ''}${v ? '<button type="button" class="btn" data-acao="imprimir">Imprimir ou salvar PDF</button>' : ''}${pode ? '<a class="btn pri" href="#/formacoes/atualizar">Atualizar dados</a>' : ''}</div></div>`;
   if (!v) {
-    return `<main class="page">${cab}<section class="card fm-bx" style="text-align:center;padding:48px 24px"><h2>Nenhum dado de formação publicado ainda</h2>
+    return `<main class="page">${cab}${avisoBanco(S)}<section class="card fm-bx" style="text-align:center;padding:48px 24px"><h2>Nenhum dado de formação publicado ainda</h2>
       <p class="sub" style="margin:8px auto 18px">Os dados vêm da planilha de processos formativos (abas de participações e de processos). ${pode ? 'Envie a planilha para montar o painel.' : 'Quem atualiza é qualquer pessoa da plataforma com perfil de edição.'}</p>
       ${pode ? '<a class="btn pri" href="#/formacoes/atualizar">Enviar a planilha</a>' : ''}</section></main>`;
   }
@@ -425,7 +428,7 @@ export async function pagFormacoes(S) {
       <ul>${destaque.map((x) => `<li>${e(x.texto)}${x.cod && pode ? ` <button type="button" class="lnk" data-acao="fm-editar" data-cod="${e(x.cod)}">Corrigir</button>` : ''}</li>`).join('')}</ul>
       <span class="xs">Os números do painel usam os dados como estão.${nAl.avisos ? ` Há também ${nAl.avisos} ${nAl.avisos === 1 ? 'aviso' : 'avisos'}.` : ''}</span></div>
       <button type="button" class="btn sm" data-acao="fm-ir-qualidade">Ver todas</button></div>` : '';
-  return `<main class="page fm">${cab}${meta}${faixa}${filtros}${kpis}${tabela}${linha}
+  return `<main class="page fm">${cab}${avisoBanco(S)}${meta}${faixa}${filtros}${kpis}${tabela}${linha}
     <div class="fm-g2">${setor}${perfil}</div>
     ${mapa}${lado}
     ${qual}${hist}
@@ -599,7 +602,7 @@ export async function pagFormacoesPessoas(S) {
   const tabela = achadas.length ? `<div class="fm-rolar"><table class="fm-tb grande fm-ptb"><thead><tr><th>Nome</th><th>Contatos</th><th>UF</th><th>Município</th><th>Gênero</th><th>Segmento</th><th>Formações</th></tr></thead><tbody>${achadas.slice(0, lim).map(linha).join('')}</tbody></table></div>
     ${achadas.length > lim ? `<div style="text-align:center;padding:14px"><button type="button" class="btn" data-acao="fm-pmais">Mostrar mais ${fmt(Math.min(50, achadas.length - lim))} (de ${fmt(achadas.length - lim)} restantes)</button></div>` : ''}`
     : '<p class="vazio" style="padding:24px">Ninguém encontrado com esses filtros.</p>';
-  return `<main class="page fm">${cab}<div class="acoes-ph"></div></div>
+  return `<main class="page fm">${cab}<div class="acoes-ph"></div></div>${avisoBanco(S)}
     ${semNomes ? '<div class="fm-aviso" style="margin:0">A planilha publicada não trouxe nomes nem contatos, então a busca funciona só por código, instituição e município. Envie a lista de presença em <a href="#/formacoes/atualizar">Atualizar dados</a>.</div>' : ''}
     <div class="fm-pbusca">
       <section class="card fm-bx fm-pmapa-c" aria-labelledby="t-pm"><h2 id="t-pm">Onde estão${f.puf ? ` · ${e(nomeUF[f.puf] || f.puf)}` : ''}</h2><p class="s">${f.puf ? '<button type="button" class="lnk" data-acao="fm-pfiltro" data-chave="puf" data-valor="">Ver o Brasil todo</button>' : 'Clique numa UF para ver só as pessoas de lá'}</p>${mapa}${legMapa}</section>
@@ -1010,7 +1013,7 @@ async function pagLista(S, cab, envio) {
   }).join('');
   const cartao = (n, t) => `<div><b>${n}</b><span>${t}</span></div>`;
   const pend = resumo.lista;
-  return `<main class="page fm" style="max-width:1080px">${cab}
+  return `<main class="page fm" style="max-width:1080px">${cab}${avisoBanco(S)}
     <section class="card fm-bx">${envio}</section>
     <section class="card fm-bx"><h2>O que esta lista traz</h2><p class="s">${L.primeira ? 'Ainda não há dados publicados: esta lista começa o painel' : `Soma aos dados publicados em ${dataLonga(S.form.versao.criado_em)}. Só os encontros desta lista são trocados; o resto fica como está`}</p>
       <div class="fm-dif">${cartao(fmt(L.respostas), 'respostas lidas')}${cartao(fmt(L.pessoas), 'pessoas')}${cartao(fmt(L.pessoas - L.reconhecidas), 'pessoas novas na base')}${cartao(fmt(L.procNovos.length), L.procNovos.length === 1 ? 'processo novo' : 'processos novos')}</div>
@@ -1189,7 +1192,7 @@ export async function pagFormacoesAtualizar(S) {
     <div style="flex:1;min-width:0">${fi ? `<b>${e(fi.arquivo)}</b><div class="xs muted">${Object.keys(fi.abas).length} ${Object.keys(fi.abas).length === 1 ? 'aba' : 'abas'}: ${Object.entries(fi.abas).map(([n, a]) => `${e(n)} (${fmt(a.linhas.length)} linhas)`).join(', ')}</div>` : '<b>Escolha a lista de presença (.xlsx ou .csv)</b><div class="xs muted">A exportação das respostas do formulário, sem precisar mexer</div>'}</div>
     <span class="btn sm">${fi ? 'Trocar arquivo' : 'Escolher arquivo'}</span><input type="file" data-fm-arquivo accept=".xlsx,.xls,.csv,.ods" aria-label="Planilha de formações"></label>`;
   if (!fi) {
-    return `<main class="page fm" style="max-width:1080px">${cab}<section class="card fm-bx">${envio}</section>
+    return `<main class="page fm" style="max-width:1080px">${cab}${avisoBanco(S)}<section class="card fm-bx">${envio}</section>
       <section class="card fm-bx"><h2>Padrão: a lista de presença do formulário</h2><p class="s">Exporte as respostas do formulário de presença (Microsoft Forms) para Excel e envie aqui, do jeito que sai. Pode enviar a lista de um encontro só ou de vários eventos juntos.</p>
       <ul class="fm-ul"><li><b>Nome do evento:</b> vira o processo formativo. Quando termina em "| Encontro 2" (ou Módulo, Aula, Dia, Sessão, Etapa), a plataforma junta os encontros no mesmo processo.</li>
       <li><b>Pessoa:</b> reconhecida pelo CPF, pelo e-mail ou, sem os dois, pelo nome. Assim a mesma pessoa em listas diferentes vira uma só. <b>O CPF nunca é gravado</b>: serve só para reconhecer a pessoa e é guardado embaralhado.</li>
