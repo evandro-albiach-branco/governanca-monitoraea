@@ -1272,6 +1272,11 @@ create table if not exists public.formacao_contatos (
   atualizado_por  uuid references public.membros(id) on delete set null,
   atualizado_em   timestamptz not null default now()
 );
+-- autoriza_imagem: resposta da lista de presença sobre uso de imagem
+-- chaves: códigos embaralhados (hash) do CPF e do e-mail, para reconhecer a
+--         mesma pessoa em listas diferentes. O CPF em si nunca é gravado.
+alter table public.formacao_contatos add column if not exists autoriza_imagem boolean;
+alter table public.formacao_contatos add column if not exists chaves text[] not null default '{}';
 alter table public.formacao_contatos enable row level security;
 drop policy if exists ver on public.formacao_contatos;
 create policy ver on public.formacao_contatos for select to authenticated using (public.posso_editar());
@@ -1297,8 +1302,14 @@ language sql immutable set search_path = public as $$
     'uf',           case when upper(x->>'uf') ~ '^[A-Z]{2}$' then upper(x->>'uf') end,
     'cod_mun',      case when x->>'cod_mun' ~ '^[0-9]{7}$' then x->>'cod_mun' end,
     'regiao',       left(nullif(x->>'regiao', ''), 40),
-    'genero',       case when upper(x->>'genero') in ('F','M') then upper(x->>'genero') end,
-    'setor',        left(nullif(x->>'setor', ''), 60),
+    'genero',       case when upper(x->>'genero') in ('F','M','O') then upper(x->>'genero') end,
+    'raca',         case when x->>'raca' in ('branca','preta','parda','amarela','indigena') then x->>'raca' end,
+    'faixa',        left(nullif(x->>'faixa', ''), 30),
+    'nota',         case when jsonb_typeof(x->'nota') = 'number' and (x->>'nota')::numeric between 0 and 5 then x->'nota' end,
+    'encontros',    case when jsonb_typeof(x->'encontros') = 'array' then
+                      (select jsonb_agg(distinct (e#>>'{}')::int) from jsonb_array_elements(x->'encontros') e
+                        where jsonb_typeof(e) = 'number' and (e#>>'{}')::numeric between 1 and 200) end,
+    'setor',        left(nullif(x->>'setor', ''), 80),
     'instituicao',  left(nullif(x->>'instituicao', ''), 160),
     'ciea',         case when jsonb_typeof(x->'ciea') = 'boolean' then x->'ciea' end,
     'situacao',     case when x->>'situacao' in ('concluiu','nao_concluiu','cursando') then x->>'situacao' end,
@@ -1313,14 +1324,18 @@ create or replace function public.formacao_limpar_processos(p jsonb) returns jso
 language sql immutable set search_path = public as $$
   select coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
     'cod',          left(nullif(x->>'cod', ''), 40),
-    'sigla',        left(nullif(x->>'sigla', ''), 80),
+    'sigla',        left(nullif(x->>'sigla', ''), 120),
     'nome',         left(nullif(x->>'nome', ''), 300),
     'inicio',       case when x->>'inicio' ~ '^[0-9]{4}-[0-9]{2}$' then x->>'inicio' end,
     'fim',          case when x->>'fim' ~ '^[0-9]{4}-[0-9]{2}$' then x->>'fim' end,
     'turmas',       case when jsonb_typeof(x->'turmas') = 'number' then x->'turmas' end,
     'carga_turma',  case when jsonb_typeof(x->'carga_turma') = 'number' then x->'carga_turma' end,
     'carga_total',  case when jsonb_typeof(x->'carga_total') = 'number' then x->'carga_total' end,
-    'modalidade',   left(nullif(x->>'modalidade', ''), 40)
+    'modalidade',   left(nullif(x->>'modalidade', ''), 40),
+    'origem',       case when x->>'origem' in ('lista','planilha') then x->>'origem' end,
+    'encontros',    case when jsonb_typeof(x->'encontros') = 'number' and (x->>'encontros')::numeric between 1 and 200 then x->'encontros' end,
+    'min_encontros',case when jsonb_typeof(x->'min_encontros') = 'number' and (x->>'min_encontros')::numeric between 1 and 200 then x->'min_encontros' end,
+    'carga_encontro',case when jsonb_typeof(x->'carga_encontro') = 'number' and (x->>'carga_encontro')::numeric between 0 and 1000 then x->'carga_encontro' end
   ))), '[]'::jsonb)
   from jsonb_array_elements(coalesce(p, '[]'::jsonb)) x
 $$;
@@ -1358,15 +1373,21 @@ begin
   returning id into v_id;
   -- nomes e contatos: atualiza quem veio na planilha, sem apagar o que não veio
   if jsonb_typeof(p_contatos) = 'array' then
-    insert into formacao_contatos (cod_pessoa, nome, email, telefone, atualizado_por, atualizado_em)
+    insert into formacao_contatos (cod_pessoa, nome, email, telefone, autoriza_imagem, chaves, atualizado_por, atualizado_em)
     select distinct on (left(c->>'cod_pessoa', 40)) left(c->>'cod_pessoa', 40), left(nullif(trim(c->>'nome'), ''), 200),
-           lower(left(nullif(trim(c->>'email'), ''), 200)), left(nullif(trim(c->>'telefone'), ''), 60), auth.uid(), now()
+           lower(left(nullif(trim(c->>'email'), ''), 200)), left(nullif(trim(c->>'telefone'), ''), 60),
+           case when jsonb_typeof(c->'autoriza_imagem') = 'boolean' then (c->>'autoriza_imagem')::boolean end,
+           coalesce((select array_agg(distinct left(k, 40)) from jsonb_array_elements_text(case when jsonb_typeof(c->'chaves') = 'array' then c->'chaves' else '[]'::jsonb end) k
+                      where k ~ '^h[0-9a-f]{8,39}$'), '{}'),
+           auth.uid(), now()
       from jsonb_array_elements(p_contatos) c
      where nullif(c->>'cod_pessoa', '') is not null
     on conflict (cod_pessoa) do update set
       nome = coalesce(excluded.nome, formacao_contatos.nome),
       email = coalesce(excluded.email, formacao_contatos.email),
       telefone = coalesce(excluded.telefone, formacao_contatos.telefone),
+      autoriza_imagem = coalesce(excluded.autoriza_imagem, formacao_contatos.autoriza_imagem),
+      chaves = (select coalesce(array_agg(distinct k), '{}') from unnest(formacao_contatos.chaves || excluded.chaves) k),
       atualizado_por = excluded.atualizado_por, atualizado_em = now();
   end if;
   -- registra no histórico dos itens do Quadro ligados a cada processo

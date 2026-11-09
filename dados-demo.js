@@ -1,8 +1,8 @@
 // Modo demonstração: mesmos fluxos e regras do banco real, com dados de
 // exemplo guardados apenas neste navegador (localStorage).
-import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub, podeExcluirItem } from './util.js?v=20261109a';
-import { versaoDemo, contatosDemo, participacoesDemo } from './demo-formacoes.js?v=20261109a';
-import { verificar, contarAlertas } from './formacoes.js?v=20261109a';
+import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub, podeExcluirItem } from './util.js?v=20261109c';
+import { versaoDemo, contatosDemo, participacoesDemo } from './demo-formacoes.js?v=20261109c';
+import { verificar, contarAlertas } from './formacoes.js?v=20261109c';
 
 const CHAVE = 'gov-monitoraea-demo-v5';
 const REPO_DEMO = 'ladis-inpe/monitoraea';
@@ -542,8 +542,8 @@ export function criarBackendDemo() {
     async formacaoPublicar(dados, arquivo, nota, resumo, contatos) {
       if (!podeFormacao()) falha('Seu perfil é só de leitura e não atualiza as formações.');
       const limpo = {
-        processos: (dados.processos || []).map((p) => soCampos(p, ['cod', 'sigla', 'nome', 'inicio', 'fim', 'turmas', 'carga_turma', 'carga_total', 'modalidade'])),
-        participacoes: (dados.participacoes || []).map((r) => soCampos(r, ['cod_pessoa', 'cod_processo', 'papel', 'uf', 'cod_mun', 'regiao', 'genero', 'setor', 'instituicao', 'ciea', 'situacao', 'turma', 'carga'])),
+        processos: (dados.processos || []).map((p) => soCampos(p, ['cod', 'sigla', 'nome', 'inicio', 'fim', 'turmas', 'carga_turma', 'carga_total', 'modalidade', 'origem', 'encontros', 'min_encontros', 'carga_encontro'])),
+        participacoes: (dados.participacoes || []).map((r) => soCampos(r, ['cod_pessoa', 'cod_processo', 'papel', 'uf', 'cod_mun', 'regiao', 'genero', 'setor', 'instituicao', 'ciea', 'situacao', 'turma', 'carga', 'raca', 'faixa', 'nota', 'encontros'])),
       };
       if (!limpo.participacoes.length) falha('Nenhuma participação reconhecida na planilha.');
       const v = { id: novoId(), criado_em: agora(), criado_por: euId, arquivo, nota: nota || null, dados: limpo, resumo: resumo || {} };
@@ -551,7 +551,8 @@ export function criarBackendDemo() {
       for (const c of contatos || []) {
         if (!c.cod_pessoa) continue;
         const a = db.formacao_contatos[c.cod_pessoa] || { cod_pessoa: c.cod_pessoa };
-        db.formacao_contatos[c.cod_pessoa] = { ...a, ...soCampos({ nome: c.nome, email: c.email ? String(c.email).toLowerCase() : null, telefone: c.telefone }, ['nome', 'email', 'telefone']) };
+        db.formacao_contatos[c.cod_pessoa] = { ...a, ...soCampos({ nome: c.nome, email: c.email ? String(c.email).toLowerCase() : null, telefone: c.telefone, autoriza_imagem: typeof c.autoriza_imagem === 'boolean' ? c.autoriza_imagem : null }, ['nome', 'email', 'telefone', 'autoriza_imagem']),
+          chaves: [...new Set([...(a.chaves || []), ...(c.chaves || [])])] };
       }
       // a demonstração guarda só as 6 versões mais recentes, para caber no navegador
       db.formacao_versoes = db.formacao_versoes.sort((a, b) => b.criado_em.localeCompare(a.criado_em) || b.id - a.id).slice(0, 6);
@@ -566,7 +567,7 @@ export function criarBackendDemo() {
       if (!podeFormacao()) falha('Seu perfil é só de leitura e não atualiza as formações.');
       const v = ultimaFormacao();
       if (!v) falha('Ainda não há dados de formação publicados.');
-      const KS = ['cod', 'sigla', 'nome', 'inicio', 'fim', 'turmas', 'carga_turma', 'carga_total', 'modalidade'];
+      const KS = ['cod', 'sigla', 'nome', 'inicio', 'fim', 'turmas', 'carga_turma', 'carga_total', 'modalidade', 'origem', 'encontros', 'min_encontros', 'carga_encontro'];
       const procs = copia(v.dados.processos);
       const i = procs.findIndex((p) => String(p.cod) === cod);
       const novo = soCampos({ ...(i >= 0 ? procs[i] : {}), ...campos, cod }, KS);

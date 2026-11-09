@@ -236,25 +236,45 @@ O botão **Imprimir ou salvar PDF** gera uma versão limpa, sem menu, para levar
 
 ## 10. Formações
 
-A página **Formações** mostra os processos formativos: processos, linha do tempo, setor das instituições, perfil de quem participa, mapas, cobertura e qualidade dos dados.
+A página **Formações** reúne os processos formativos: processos e encontros, linha do tempo, perfil de quem participa, mapas do IBGE por UF e por município, cobertura, qualidade dos dados e a busca de pessoas.
 
-- **Mapas:** usam a malha oficial do IBGE (Malha Municipal Digital 2025), simplificada para abrir rápido na web. Há dois recortes: **por UF** e **por município**, contando participações ou pessoas. Clicar numa UF filtra o painel e aproxima o mapa dos municípios dela.
-- **Município:** o mapa por município depende de uma coluna na planilha com o **código IBGE de 7 dígitos** (por exemplo, 3550308 para São Paulo). Códigos de 6 dígitos são completados automaticamente; códigos que não existem na malha aparecem em *Pontos para conferir*.
-- **Quem atualiza e corrige:** qualquer pessoa da plataforma, de qualquer instituição, exceto os perfis só de leitura.
-- **Atualizar por planilha:** **Atualizar dados** recebe a planilha de sempre (.xlsx, .xls ou .csv).
-  - A plataforma reconhece as colunas, mesmo com nomes um pouco diferentes, e deixa trocar qualquer uma que tenha errado.
-  - Antes de publicar, mostra o que muda no painel e as inconsistências encontradas.
-  - Cada publicação vira uma versão. As anteriores ficam no *Histórico de atualizações* e podem ser restauradas.
-- **Corrigir direto na plataforma:** em cada processo, **Editar** abre sigla, descrição, modalidade, início, fim, turmas, horas por turma, carga total, quem realiza e o item do Quadro.
-  - Enquanto se digita, a conta *turmas × horas* aparece ao lado da carga total. Quando não bate, o botão **Usar** preenche o total certo.
-  - Cada correção vira uma nova versão, com a nota do que foi corrigido. Para desfazer, basta restaurar a versão anterior.
-  - O item do Quadro ligado ao processo ganha um registro no histórico a cada correção ou atualização.
-- **Inconsistências:** a plataforma confere os dados sozinha, a cada publicação e a cada correção.
-  - **Erros** (em vermelho): carga total diferente de *turmas × horas*; processo que termina antes de começar; mesma pessoa duas vezes no mesmo processo; município de outra UF.
-  - **Avisos** (em amarelo): processo sem início ou sem carga; processo sem participações; participações de processo sem cadastro; região diferente da UF; mesma pessoa com gênero diferente; participantes sem UF ou sem município; instituição só como "OUTROS"; participantes sem e-mail.
-  - Os erros aparecem numa faixa no topo da página, com o botão **Corrigir**, e como número em vermelho em *Formações*, no menu, para todo mundo. A lista completa fica em *Qualidade dos dados*.
-- **Encontrar pessoas:** em *Formações › Encontrar pessoas*, busca por nome, e-mail, telefone, código, instituição ou município, com filtros de processo, UF e situação. Para cada pessoa, mostra as formações (turma, se concluiu, carga), a carga cursada, a UF, o município e os contatos. Dá para copiar os e-mails (para colar em Cco), baixar a lista filtrada em CSV e corrigir o contato de alguém.
-  - Colunas reconhecidas na planilha: nome, e-mail, telefone, turma, situação (concluiu, desistente, cursando…) e carga horária cursada. Sem a carga cursada, vale a carga de uma turma do processo, marcada com *.
-- **Privacidade (LGPD):** nomes, e-mails e telefones ficam na tabela `formacao_contatos`, separada das versões. Só perfis de colaboração, coordenação e administração enxergam; perfis de leitura veem só os números. Uma pessoa que pedir para sair do cadastro tem nome e contatos apagados em *Corrigir contato*, deixando tudo vazio; a participação dela continua contando nos números.
-- **Leitura da planilha:** o leitor de planilhas (SheetJS) é carregado só nessa tela, a partir de cdn.jsdelivr.net.
+### 10.1 Instalar ou atualizar (uma vez por nova versão)
 
+1. **Banco:** no Supabase, abra *SQL Editor*, cole `formacoes.sql` e clique em *Run*. O arquivo só acrescenta e pode ser rodado de novo sem apagar nada. (Não rode `schema.sql`: ele recria o banco do zero.)
+2. **Site:** no GitHub, envie os arquivos para a raiz do repositório, por cima dos atuais, **sem trocar o `config.js`**.
+3. **Conferir:** espere uns 5 minutos e recarregue o site com Ctrl + Shift + R. O número da versão aparece em letra pequena no pé do menu lateral.
+
+### 10.2 Padrão de dados: a lista de presença do formulário
+
+A partir de agora, o dado padrão é a **lista de presença** do formulário (Microsoft Forms), exportada para Excel do jeito que sai. Uma linha é uma resposta: uma pessoa em um encontro.
+
+- **Nome do evento** vira o processo formativo. Para agrupar encontros de um mesmo processo, termine o nome com `| Encontro 1`, `| Encontro 2`... (também valem Módulo, Aula, Dia, Sessão, Etapa). Sem isso, cada evento é um processo de um encontro só. Mantenha o nome do processo igual em todos os encontros.
+- **A pessoa** é reconhecida pelo CPF, pelo e-mail ou, sem os dois, pelo nome com a cidade. A mesma pessoa em listas diferentes vira uma só. **O CPF não é gravado**: a plataforma guarda só um código embaralhado (hash) dele, para reconhecer a pessoa da próxima vez.
+- **Cidade e estado** viram o município oficial do IBGE. Aceita o estado por extenso ou a sigla, "Cidade-UF" e as regiões administrativas do DF (contam como Brasília). O que não for reconhecido aparece em *Pontos para conferir*.
+- **Também entram:** telefone, instituição, autorização de imagem, gênero, cor ou raça, faixa etária, setor e a nota da atividade (1 a 5). Comentários livres não entram.
+
+### 10.3 Atualizar os dados (a cada evento)
+
+1. Exporte as respostas do formulário para Excel.
+2. Em *Formações › Atualizar dados*, envie o arquivo. Pode ser a lista de um encontro só ou de vários eventos juntos.
+3. Confira a tela: processos e encontros encontrados, pessoas novas, colunas reconhecidas e pontos para conferir. Escreva uma nota e clique em **Publicar**.
+4. **Na primeira vez de cada processo**, em *Formações*, clique em **Editar** no processo e informe as horas por encontro, quantos encontros estão previstos e o mínimo para concluir (sem mínimo, conclui quem foi a todos). Ajuste também a sigla, se quiser um nome mais curto.
+
+As listas **somam** ao que já existe: cada envio troca só os encontros que traz e mantém o resto. Enviar a mesma lista duas vezes não duplica nada. Cada publicação vira uma versão no *Histórico de atualizações*, que pode ser restaurada.
+
+**Situação de cada pessoa:** conclui quem foi ao mínimo de encontros. Enquanto o processo não termina (fim no futuro, ou menos encontros registrados que os previstos), quem ainda não chegou ao mínimo aparece como *cursando*; depois, como *não concluiu*. A carga cursada é o número de encontros vezes as horas por encontro.
+
+A planilha antiga, com códigos de pessoa e de processo, continua aceita e também soma: troca só os processos que traz.
+
+### 10.4 Inconsistências
+
+A plataforma confere os dados a cada publicação e correção. **Erros** (vermelho) aparecem numa faixa no topo da página e como número em *Formações*, no menu: carga total diferente da conta, processo que termina antes de começar, mínimo de encontros maior que os previstos, município de outra UF. **Avisos** (amarelo) ficam em *Qualidade dos dados*: processo sem horas, cidades não reconhecidas, pessoas sem e-mail, entre outros. Os itens de processo têm o botão **Corrigir**.
+
+### 10.5 Encontrar pessoas e privacidade (LGPD)
+
+Em *Formações › Encontrar pessoas*: busca por nome, e-mail, telefone, instituição ou município, com filtros de processo, UF e situação. Mostra os processos e encontros de cada pessoa, se concluiu, a carga cursada, UF, município, contatos e se autoriza uso de imagem. Dá para copiar os e-mails (para colar em Cco), baixar a lista em CSV e corrigir um contato.
+
+- Nomes, e-mails, telefones e autorização de imagem ficam na tabela `formacao_contatos`, que só perfis de colaboração, coordenação e administração enxergam. Perfis de leitura veem só os números agregados.
+- Gênero, cor ou raça e faixa etária aparecem só agregados no painel, sem nome.
+- Se alguém pedir para sair do cadastro, apague nome e contatos em *Corrigir contato* (deixe tudo vazio). A participação continua contando nos números.
+- Quem atualiza e corrige: qualquer pessoa da plataforma, de qualquer instituição, exceto os perfis só de leitura.

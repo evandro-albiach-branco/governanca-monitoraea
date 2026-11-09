@@ -1,9 +1,9 @@
 // Formações: painel dos processos formativos e atualização por planilha.
 // Os mapas usam a malha oficial do IBGE (Malha Municipal Digital 2025), já simplificada
 // e convertida em caminhos SVG nos arquivos malha-uf.json e malha-municipios.json.
-import { e, dataLonga, dataCurta, quando, siglaDe, podeEditar } from './util.js?v=20261109a';
+import { e, dataLonga, dataCurta, quando, siglaDe, podeEditar } from './util.js?v=20261109c';
 
-const V = '20261109a';
+const V = '20261109c';
 const XLSX_URL = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
 
 // ------------------------------------------------------------------ constantes
@@ -55,8 +55,31 @@ function caixa(d, b = [Infinity, Infinity, -Infinity, -Infinity]) {
 
 // ------------------------------------------------------------------ dados
 export async function garantirFormacoes(S) {
-  if (!S.form) S.form = await S.api.formacoes();
+  if (!S.form) { S.form = await S.api.formacoes(); derivar(S.form.versao?.dados); }
   return S.form;
+}
+// Em processos registrados por lista de presença, a situação de cada pessoa
+// sai da conta de encontros: concluiu quem foi ao mínimo pedido; quem não foi
+// fica "cursando" enquanto o processo não acabou e "não concluiu" depois.
+export function minimoEncontros(p, vistos) {
+  return p.min_encontros || p.encontros || vistos || 1;
+}
+export function derivar(dados) {
+  if (!dados) return dados;
+  const hoje = new Date(); const agora = hoje.getFullYear() * 12 + hoje.getMonth();
+  const procs = new Map((dados.processos || []).map((p) => [String(p.cod), p]));
+  const maxVisto = new Map();
+  for (const r of dados.participacoes) if (r.encontros?.length) maxVisto.set(String(r.cod_processo), Math.max(maxVisto.get(String(r.cod_processo)) || 0, ...r.encontros));
+  for (const r of dados.participacoes) {
+    if (!r.encontros?.length) continue;
+    const p = procs.get(String(r.cod_processo)) || {};
+    const vistos = maxVisto.get(String(r.cod_processo)) || 1;
+    const precisa = minimoEncontros(p, vistos);
+    const previstos = p.encontros || vistos;
+    const aberto = (p.fim && ym(p.fim) >= agora) || previstos > vistos;
+    r.situacao = r.encontros.length >= precisa ? 'concluiu' : (aberto ? 'cursando' : 'nao_concluiu');
+  }
+  return dados;
 }
 const ym = (s) => (s && /^\d{4}-\d{2}$/.test(s) ? Number(s.slice(0, 4)) * 12 + Number(s.slice(5)) - 1 : null);
 const mesAno = (s) => (s ? `${MESES[Number(s.slice(5)) - 1]}/${s.slice(0, 4)}` : '—');
@@ -77,7 +100,8 @@ function processosDe(S) {
   const lista = [...(v.dados.processos || [])];
   const cods = new Set(lista.map((p) => String(p.cod)));
   for (const r of v.dados.participacoes) if (!cods.has(String(r.cod_processo))) { cods.add(String(r.cod_processo)); lista.push({ cod: String(r.cod_processo), sigla: String(r.cod_processo) }); }
-  return lista.map((p) => ({ ...p, cod: String(p.cod), meta: S.form.meta[String(p.cod)] || {} }))
+  return lista.map((p) => ({ ...p, cod: String(p.cod), meta: S.form.meta[String(p.cod)] || {},
+    carga_total: p.carga_total || (p.encontros && p.carga_encontro ? p.encontros * p.carga_encontro : undefined) }))
     .sort((a, b) => (a.inicio || '9').localeCompare(b.inicio || '9'));
 }
 function filtrar(S, linhas) {
@@ -92,6 +116,7 @@ function filtrar(S, linhas) {
 }
 const conta = (lista, chave) => lista.reduce((m, r) => { const k = typeof chave === 'function' ? chave(r) : r[chave]; if (k !== undefined && k !== null && k !== '') m.set(k, (m.get(k) || 0) + 1); return m; }, new Map());
 const fmt = (n, d = 0) => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: d, minimumFractionDigits: d });
+const rotSetor = (s) => (s && s === s.toUpperCase() ? titulo(s) : s);
 const titulo = (s) => String(s || '').toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()).replace(/\b(De|Da|Do|Das|Dos|E)\b/g, (c) => c.toLowerCase());
 
 // ------------------------------------------------------------------ verificação de consistência
@@ -107,7 +132,9 @@ export function verificarProcesso(p, nPart) {
   }
   if (p.inicio && p.fim && p.fim < p.inicio) out.push({ tipo: 'erro', cod: p.cod, texto: `${nome} termina (${mesAno(p.fim)}) antes de começar (${mesAno(p.inicio)})`, n: 1, acao: 'Corrigir o início ou o fim' });
   if (!p.inicio) out.push({ tipo: 'aviso', cod: p.cod, texto: `${nome} sem data de início`, n: 1, acao: 'Informar o mês de início' });
-  if (!p.carga_total && !(p.turmas && p.carga_turma)) out.push({ tipo: 'aviso', cod: p.cod, texto: `${nome} sem carga horária`, n: 1, acao: 'Informar as turmas e a carga horária' });
+  if (p.encontros && p.min_encontros && p.min_encontros > p.encontros) out.push({ tipo: 'erro', cod: p.cod, texto: `${nome}: pede ${p.min_encontros} encontros para concluir, mas tem só ${p.encontros} previstos`, n: 1, acao: 'Corrigir o mínimo ou o número de encontros' });
+  if (p.origem === 'lista' && !p.carga_encontro && !p.carga_total) out.push({ tipo: 'aviso', cod: p.cod, texto: `${nome} sem horas por encontro`, n: 1, acao: 'Informar quantas horas tem cada encontro' });
+  else if (!p.carga_total && !(p.turmas && p.carga_turma) && !p.carga_encontro) out.push({ tipo: 'aviso', cod: p.cod, texto: `${nome} sem carga horária`, n: 1, acao: 'Informar as turmas e a carga horária' });
   if (nPart === 0) out.push({ tipo: 'aviso', cod: p.cod, texto: `${nome} não tem nenhuma participação`, n: 1, acao: 'Conferir o código do processo na aba de participações' });
   return out;
 }
@@ -218,7 +245,7 @@ export async function pagFormacoes(S) {
   const v = S.form.versao;
   const pode = podeFormacao(S.eu);
   const cab = `<div class="ph"><div class="txt"><h1>Formações</h1><p class="sub">Processos formativos do MonitoraEA e parceiros: quem participou, onde e com que carga horária</p></div>
-    <div class="acoes-ph">${v && pode ? '<a class="btn" href="#/formacoes/pessoas">Encontrar pessoas</a>' : ''}${v ? '<button type="button" class="btn" data-acao="imprimir">Imprimir ou salvar PDF</button>' : ''}${pode ? '<a class="btn pri" href="#/formacoes/atualizar">Atualizar dados</a>' : ''}</div></div>`;
+    <div class="acoes-ph">${pode ? '<a class="btn" href="#/formacoes/pessoas">Encontrar pessoas</a>' : ''}${v ? '<button type="button" class="btn" data-acao="imprimir">Imprimir ou salvar PDF</button>' : ''}${pode ? '<a class="btn pri" href="#/formacoes/atualizar">Atualizar dados</a>' : ''}</div></div>`;
   if (!v) {
     return `<main class="page">${cab}<section class="card fm-bx" style="text-align:center;padding:48px 24px"><h2>Nenhum dado de formação publicado ainda</h2>
       <p class="sub" style="margin:8px auto 18px">Os dados vêm da planilha de processos formativos (abas de participações e de processos). ${pode ? 'Envie a planilha para montar o painel.' : 'Quem atualiza é qualquer pessoa da plataforma com perfil de edição.'}</p>
@@ -250,7 +277,7 @@ export async function pagFormacoes(S) {
   const filtros = `<form class="fm-filtros" data-form="fm-busca">
     <div class="fm-f"><label for="ff-proc">Processo</label><select id="ff-proc" data-filtro="fproc">${opt([['todos', `Todos os ${procs.length}`], ...procs.map((p) => [p.cod, p.sigla || p.cod])], f.fproc)}</select></div>
     <div class="fm-f"><label for="ff-reg">Região</label><select id="ff-reg" data-filtro="fregiao">${opt([['todas', 'Todas'], ...REGIOES.map((r) => [r, r])], f.fregiao)}</select></div>
-    <div class="fm-f"><label for="ff-set">Setor</label><select id="ff-set" data-filtro="fsetor">${opt([['todos', 'Todos'], ...setores.map((s) => [s, titulo(s)])], f.fsetor)}</select></div>
+    <div class="fm-f"><label for="ff-set">Setor</label><select id="ff-set" data-filtro="fsetor">${opt([['todos', 'Todos'], ...setores.map((s) => [s, rotSetor(s)])], f.fsetor)}</select></div>
     <div class="fm-f"><label for="ff-ciea">Representa CIEA</label><select id="ff-ciea" data-filtro="fciea">${opt([['todos', 'Todos'], ['sim', 'Sim'], ['nao', 'Não']], f.fciea)}</select></div>
     <div class="fm-f" style="flex:1 1 220px"><label for="ff-q">Buscar instituição ou código</label><div style="display:flex;gap:6px"><input id="ff-q" name="q" type="search" value="${e(f.fq || '')}" placeholder="Ex.: Ibama, Secretaria, 30012"><button class="btn sm" type="submit">Buscar</button></div></div>
     ${(f.fproc !== 'todos' || f.fregiao !== 'todas' || f.fsetor !== 'todos' || f.fciea !== 'todos' || f.fuf || f.fq) ? '<button type="button" class="lnk" data-acao="fm-limpar" style="align-self:center">Limpar filtros</button>' : ''}
@@ -273,7 +300,10 @@ export async function pagFormacoes(S) {
   const linhaProc = (p) => {
     const real = p.meta.realizacao;
     const item = p.meta.item_id ? S.d.itens.find((x) => x.id === p.meta.item_id) : null;
-    const turmas = p.turmas && p.carga_turma ? `${p.turmas} × ${fmt(p.carga_turma)} h` : (p.carga_total ? `${fmt(p.carga_total)} h` : '—');
+    const turmas = p.encontros ? `${p.encontros} ${p.encontros === 1 ? 'encontro' : 'encontros'}${p.carga_encontro ? ` × ${fmt(p.carga_encontro)} h` : ''}`
+      : p.turmas && p.carga_turma ? `${p.turmas} × ${fmt(p.carga_turma)} h` : (p.carga_total ? `${fmt(p.carga_total)} h` : '—');
+    const notas = todas.filter((r) => String(r.cod_processo) === p.cod && typeof r.nota === 'number');
+    const nota = notas.length ? notas.reduce((t, r) => t + r.nota, 0) / notas.length : null;
     const al = alertasProc(p.cod);
     const alErro = al.some((x) => x.tipo === 'erro');
     const marca = al.length ? ` <span class="fm-marca${alErro ? ' er' : ''}" title="${e(al.map((x) => x.texto).join(' · '))}">${icone(alErro ? 'er' : 'wa')}${alErro ? 'Inconsistente' : 'Incompleto'}</span>` : '';
@@ -283,7 +313,7 @@ export async function pagFormacoes(S) {
       <td class="muted">${e(p.cod)}</td>
       <td><button type="button" class="lnk forte" data-acao="filtro" data-chave="fproc" data-valor="${e(f.fproc === p.cod ? 'todos' : p.cod)}" title="${f.fproc === p.cod ? 'Ver todos os processos' : 'Filtrar o painel por este processo'}">${e(p.sigla || p.cod)}</button>${marca}${p.nome ? `<div class="xs muted">${e(p.nome)}</div>` : ''}</td>
       <td>${e(periodo(p))}</td><td>${e(p.modalidade || '—')}</td><td class="n${al.some((x) => x.tipo === 'erro' && /Carga/.test(x.texto)) ? ' fm-ruim' : ''}">${turmas}${p.carga_total && p.turmas && p.carga_turma ? `<div class="xs muted">total ${fmt(p.carga_total)} h</div>` : ''}</td>
-      <td class="n"><b>${fmt(partPorProc.get(p.cod) || 0)}</b></td><td class="n">${ufPorProc.get(p.cod) || 0}</td>
+      <td class="n"><b>${fmt(partPorProc.get(p.cod) || 0)}</b>${nota !== null ? `<div class="xs muted" title="Média da avaliação da atividade (1 a 5), ${fmt(notas.length)} respostas">nota ${fmt(nota, 1)}</div>` : ''}</td><td class="n">${ufPorProc.get(p.cod) || 0}</td>
       <td>${real ? `<span class="fm-real"><i style="background:${COR_REAL[real]}"></i>${NOME_REAL[real]}</span>` : '<span class="xs muted">a definir</span>'}</td>
       <td><span class="fm-pill ${emAndamento(p) ? 'and' : 'fim'}">${emAndamento(p) ? 'Em andamento' : 'Concluído'}</span></td>
       <td>${item ? `<a href="#/item/${item.id}" class="sm">${e(item.titulo.length > 42 ? item.titulo.slice(0, 40) + '…' : item.titulo)} ›</a>` : '<span class="xs muted">—</span>'}
@@ -291,13 +321,15 @@ export async function pagFormacoes(S) {
       ${pode && aberto ? `<tr class="fm-edrow"><td colspan="10"><form class="form fm-edf" data-form="fm-proc" data-cod="${e(p.cod)}"><h3>Editar ${e(p.sigla || p.cod)}</h3>
           ${al.length ? `<div class="fm-edal">${al.map((x) => `<div>${icone(x.tipo === 'erro' ? 'er' : 'wa')}<span>${e(x.texto)}</span></div>`).join('')}</div>` : ''}
           <div class="fm-edg">
-            <div class="f"><label for="fp-sigla-${e(p.cod)}">Sigla</label><input id="fp-sigla-${e(p.cod)}" name="sigla" type="text" maxlength="80" value="${e(p.sigla || '')}"></div>
+            <div class="f"><label for="fp-sigla-${e(p.cod)}">Sigla</label><input id="fp-sigla-${e(p.cod)}" name="sigla" type="text" maxlength="120" value="${e(p.sigla || '')}"></div>
             <div class="f"><label for="fp-mod-${e(p.cod)}">Modalidade</label><input id="fp-mod-${e(p.cod)}" name="modalidade" type="text" maxlength="40" value="${e(p.modalidade || '')}" placeholder="Presencial, Virtual, Híbrido"></div>
             <div class="f largo"><label for="fp-nome-${e(p.cod)}">Descrição</label><input id="fp-nome-${e(p.cod)}" name="nome" type="text" maxlength="300" value="${e(p.nome || '')}"></div>
             <div class="f"><label for="fp-ini-${e(p.cod)}">Início</label><input id="fp-ini-${e(p.cod)}" name="inicio" type="month" value="${e(p.inicio || '')}"></div>
             <div class="f"><label for="fp-fim-${e(p.cod)}">Fim</label><input id="fp-fim-${e(p.cod)}" name="fim" type="month" value="${e(p.fim || '')}"></div>
-            ${num('turmas', 'Turmas')}${num('carga_turma', 'Horas por turma', '0.5')}${num('carga_total', 'Carga total (h)', '0.5')}
-            <div class="fm-conta largo" data-fm-conta aria-live="polite">${contaCarga(p.turmas, p.carga_turma, p.carga_total)}</div>
+            ${p.origem === 'lista' || p.encontros ? `${num('encontros', 'Encontros previstos')}${num('min_encontros', 'Mínimo para concluir')}${num('carga_encontro', 'Horas por encontro', '0.5')}
+            <div class="fm-conta largo"><span class="muted">Conclui quem foi a pelo menos ${p.min_encontros || p.encontros || 'todos os'} ${(p.min_encontros || p.encontros) === 1 ? 'encontro' : 'encontros'}. Enquanto o processo não acaba, quem ainda não chegou lá aparece como cursando.</span></div>`
+              : `${num('turmas', 'Turmas')}${num('carga_turma', 'Horas por turma', '0.5')}${num('carga_total', 'Carga total (h)', '0.5')}
+            <div class="fm-conta largo" data-fm-conta aria-live="polite">${contaCarga(p.turmas, p.carga_turma, p.carga_total)}</div>`}
             <div class="f"><label for="fr-${e(p.cod)}">Realização</label><select id="fr-${e(p.cod)}" name="realizacao">${opt([['', 'A definir'], ['INPE', 'INPE'], ['ANPPEA', 'ANPPEA'], ['CONJUNTA', 'Conjunta']], real || '')}</select></div>
             <div class="f"><label for="fi-${e(p.cod)}">Item do Quadro</label><select id="fi-${e(p.cod)}" name="item">${opt([['', 'Nenhum'], ...itensAbertos.map((x) => [String(x.id), x.titulo.length > 60 ? x.titulo.slice(0, 58) + '…' : x.titulo])], p.meta.item_id ? String(p.meta.item_id) : '')}</select></div>
             <div class="f largo"><label for="fp-nota-${e(p.cod)}">O que foi corrigido <span class="muted" style="font-weight:400">(vai para o histórico)</span></label><input id="fp-nota-${e(p.cod)}" name="nota" type="text" maxlength="200" placeholder="Ex.: carga total conferida com a coordenação"></div>
@@ -305,7 +337,7 @@ export async function pagFormacoes(S) {
           <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn sm" data-acao="fm-fechar">Cancelar</button><button class="btn sm pri" type="submit">Salvar correção</button></div></form></td></tr>` : ''}`;
   };
   const tabela = `<section class="card" style="overflow:hidden" aria-labelledby="t-proc"><div class="ch"><h2 id="t-proc">Processos formativos</h2><span class="xs muted">Clique num processo para filtrar o painel</span></div>
-    <div class="fm-rolar"><table class="fm-tb grande"><thead><tr><th>Código</th><th>Processo</th><th>Período</th><th>Modalidade</th><th class="n">Turmas × horas</th><th class="n">Participações</th><th class="n">UF</th><th>Realização</th><th>Situação</th><th>No Quadro</th></tr></thead>
+    <div class="fm-rolar"><table class="fm-tb grande"><thead><tr><th>Código</th><th>Processo</th><th>Período</th><th>Modalidade</th><th class="n">Turmas ou encontros</th><th class="n">Participações</th><th class="n">UF</th><th>Realização</th><th>Situação</th><th>No Quadro</th></tr></thead>
     <tbody>${procs.map(linhaProc).join('')}</tbody></table></div></section>`;
 
   // linha do tempo
@@ -343,14 +375,16 @@ export async function pagFormacoes(S) {
     const sub = rs.filter((r) => String(r.cod_processo) === p.cod);
     if (!sub.length) return '';
     const c = conta(sub, (r) => setGrupo(r.setor || 'Não informado'));
-    return `<div class="fm-rw"><span>${e(p.sigla || p.cod)}</span>${barra(cats.map((s) => [corSet(s), c.get(s) || 0, `${titulo(s)}: ${fmt(c.get(s) || 0)} (${fmt((100 * (c.get(s) || 0)) / sub.length)}%)`]))}<span class="xs muted n">${fmt(sub.length)}</span></div>`;
+    return `<div class="fm-rw"><span>${e(p.sigla || p.cod)}</span>${barra(cats.map((s) => [corSet(s), c.get(s) || 0, `${rotSetor(s)}: ${fmt(c.get(s) || 0)} (${fmt((100 * (c.get(s) || 0)) / sub.length)}%)`]))}<span class="xs muted n">${fmt(sub.length)}</span></div>`;
   }).join('');
   const setor = `<section class="card fm-bx" aria-labelledby="t-set"><h2 id="t-set">Setor das instituições, por processo</h2><p class="s">Proporção das participações de cada processo</p>
-    ${legenda(cats.map((s) => [corSet(s), `${titulo(s)} (${fmt(totSet.get(s) || 0)})`, s === cats[cats.length - 1] && corSet(s) === '#D6DCE4']))}<div style="margin-top:10px">${linhasSet || '<p class="vazio">Nenhuma participação no filtro.</p>'}</div></section>`;
+    ${legenda(cats.map((s) => [corSet(s), `${rotSetor(s)} (${fmt(totSet.get(s) || 0)})`, s === cats[cats.length - 1] && corSet(s) === '#D6DCE4']))}<div style="margin-top:10px">${linhasSet || '<p class="vazio">Nenhuma participação no filtro.</p>'}</div></section>`;
   const pb = (rot, partes) => `<div><div class="xs muted" style="margin-bottom:6px">${rot}</div><div class="fm-stk fm-rot">${partes.filter(([, v]) => v).map(([cor, v, txt, claro]) => `<span style="flex:${v};background:${cor};color:${claro ? '#0B3570' : '#fff'}" title="${e(txt)}: ${fmt(v)}">${v / Math.max(1, partes.reduce((s, x) => s + x[1], 0)) > 0.14 ? `${e(txt)} ${fmt(v)}` : fmt(v)}</span>`).join('')}</div></div>`;
   const ciea = rs.filter((r) => r.ciea).length;
   const perfil = `<section class="card fm-bx" aria-labelledby="t-perf"><h2 id="t-perf">Perfil de quem participa</h2><p class="s">Participações no filtro</p><div class="fm-perf">
-    ${pb('Gênero', [['#0B3570', mulheres, 'Mulheres'], ['#9DC6EC', comGenero - mulheres, 'Homens', true], ['#D6DCE4', rs.length - comGenero, 'Não informado', true]])}
+    ${pb('Gênero', [['#0B3570', mulheres, 'Mulheres'], ['#9DC6EC', rs.filter((r) => r.genero === 'M').length, 'Homens', true], ['#7A5FB8', rs.filter((r) => r.genero === 'O').length, 'Outras identidades'], ['#D6DCE4', rs.length - comGenero, 'Não informado', true]])}
+    ${rs.some((r) => r.raca) ? pb('Cor ou raça (autodeclarada)', [['#0B3570', rs.filter((r) => r.raca === 'branca').length, 'Branca'], ['#2C63AE', rs.filter((r) => r.raca === 'parda').length, 'Parda'], ['#5B6678', rs.filter((r) => r.raca === 'preta').length, 'Preta'], ['#9DC6EC', rs.filter((r) => r.raca === 'amarela').length, 'Amarela', true], ['#D8920C', rs.filter((r) => r.raca === 'indigena').length, 'Indígena'], ['#D6DCE4', rs.filter((r) => !r.raca).length, 'Não informado', true]]) : ''}
+    ${rs.some((r) => r.faixa) ? pb('Faixa etária', [...conta(rs, 'faixa').entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { numeric: true })).map(([fx, n], i) => [['#9DC6EC', '#2C63AE', '#0B3570', '#5B6678'][i % 4], n, fx, i === 0]).concat([['#D6DCE4', rs.filter((r) => !r.faixa).length, 'Não informado', true]])) : ''}
     ${pb('Representam uma CIEA', [['#0B3570', ciea, 'Sim'], ['#D6DCE4', rs.length - ciea, 'Não', true]])}
     ${rs.some((r) => r.situacao) ? pb('Situação', [['#1E7A43', rs.filter((r) => r.situacao === 'concluiu').length, 'Concluíram'], ['#9DC6EC', rs.filter((r) => r.situacao === 'cursando').length, 'Cursando', true], ['#B42323', rs.filter((r) => r.situacao === 'nao_concluiu').length, 'Não concluíram'], ['#D6DCE4', rs.filter((r) => !r.situacao).length, 'Sem informação', true]]) : ''}
     ${formadores ? pb('Formandos e formadores', [['#0B3570', pessoas.size - formadores, 'Formandos'], ['#D8920C', formadores, 'Formadores']]) : ''}
@@ -419,6 +453,7 @@ const SIT = { concluiu: ['Concluiu', 'ok'], nao_concluiu: ['Não concluiu', 'nao
 // carga de uma participação: a informada na planilha ou, se concluiu, a carga de uma turma do processo
 function cargaDe(r, p) {
   if (typeof r.carga === 'number') return { h: r.carga, estimada: false };
+  if (r.encontros?.length) return { h: p?.carga_encontro ? r.encontros.length * p.carga_encontro : null, estimada: false };
   if (r.situacao !== 'concluiu' || !p) return { h: null, estimada: false };
   const h = p.carga_turma || (p.carga_total && p.turmas ? p.carga_total / p.turmas : p.carga_total) || null;
   return { h, estimada: h !== null };
@@ -441,7 +476,7 @@ function pessoas(S, nomesMun) {
     let horas = 0, estimada = false;
     for (const r of g.parts) { const k = cargaDe(r, procs.get(String(r.cod_processo))); if (r.situacao === 'concluiu' && k.h) { horas += k.h; estimada = estimada || k.estimada; } }
     const mun = [...g.parts].reverse().find((r) => r.cod_mun)?.cod_mun || null;
-    return { ...g, nome: c.nome || '', email: c.email || '', telefone: c.telefone || '', uf: [...g.parts].reverse().find((r) => r.uf)?.uf || '',
+    return { ...g, nome: c.nome || '', email: c.email || '', telefone: c.telefone || '', imagem: c.autoriza_imagem ?? null, uf: [...g.parts].reverse().find((r) => r.uf)?.uf || '',
       cod_mun: mun, municipio: mun ? (nomesMun.get(mun) || mun) : '', instituicao: ult.instituicao || '', horas, estimada,
       busca: tirarAcento([c.nome, c.email, c.telefone, g.cod, ult.instituicao, mun ? nomesMun.get(mun) : ''].join(' ')) };
   });
@@ -492,7 +527,8 @@ export async function pagFormacoesPessoas(S) {
   const chip = (r) => {
     const s = SIT[r.situacao];
     const k = cargaDe(r, procMap.get(String(r.cod_processo)));
-    const det = [r.turma ? `turma ${r.turma}` : '', k.h !== null ? `${fmt(k.h)} h${k.estimada ? '*' : ''}` : ''].filter(Boolean).join(' · ');
+    const pr = procMap.get(String(r.cod_processo));
+    const det = [r.encontros?.length ? `${r.encontros.length} de ${pr?.encontros || Math.max(...r.encontros)} ${(pr?.encontros || 2) === 1 ? 'encontro' : 'encontros'}` : '', r.turma ? `turma ${r.turma}` : '', k.h !== null ? `${fmt(k.h)} h${k.estimada ? '*' : ''}` : ''].filter(Boolean).join(' · ');
     return `<span class="fm-chip ${s ? s[1] : 'sem'}" title="${e(`${siglaP.get(String(r.cod_processo)) || r.cod_processo}: ${s ? s[0] : 'situação não informada'}${det ? ' · ' + det : ''}`)}"><b>${e(siglaP.get(String(r.cod_processo)) || r.cod_processo)}</b>${s ? `<i>${s[0]}</i>` : ''}${det ? `<em>${e(det)}</em>` : ''}</span>`;
   };
   const linha = (p) => {
@@ -503,6 +539,7 @@ export async function pagFormacoesPessoas(S) {
       <td class="n">${p.horas ? `${fmt(p.horas)} h${p.estimada ? '*' : ''}` : '<span class="muted">—</span>'}</td>
       <td>${e(p.uf || '—')}</td><td>${e(p.municipio || '—')}</td>
       <td class="fm-ctt">${p.email ? `<a href="mailto:${e(p.email)}">${e(p.email)}</a>` : '<span class="xs muted">sem e-mail</span>'}${p.telefone ? `<div><a href="tel:${e(p.telefone.replace(/[^\d+]/g, ''))}">${e(p.telefone)}</a></div>` : ''}
+        ${p.imagem === false ? '<div class="xs fm-ruim">não autoriza uso de imagem</div>' : ''}
         <div><button type="button" class="lnk xs" data-acao="${aberto ? 'fm-pfechar' : 'fm-peditar'}" data-cod="${e(p.cod)}">${aberto ? 'Fechar' : 'Corrigir contato'}</button></div></td></tr>
       ${aberto ? `<tr class="fm-edrow"><td colspan="6"><form class="form fm-edf" data-form="fm-contato" data-cod="${e(p.cod)}"><h3>Contato de ${e(p.nome || 'código ' + p.cod)}</h3>
         <div class="fm-edg"><div class="f largo"><label for="pc-n">Nome</label><input id="pc-n" name="nome" type="text" maxlength="200" value="${e(p.nome)}"></div>
@@ -528,10 +565,10 @@ export function listaCSV(S) {
   const lista = filtrarPessoas(S, pessoas(S, nomesMunCache || new Map()));
   const procs = new Map(processosDe(S).map((p) => [p.cod, p]));
   const q = (t) => `"${String(t ?? '').replace(/"/g, '""')}"`;
-  const linhas = [['codigo', 'nome', 'email', 'telefone', 'uf', 'municipio', 'cod_mun', 'instituicao', 'formacoes', 'concluidas', 'carga_cursada_h'].join(';')];
+  const linhas = [['codigo', 'nome', 'email', 'telefone', 'autoriza_imagem', 'uf', 'municipio', 'cod_mun', 'instituicao', 'formacoes', 'concluidas', 'carga_cursada_h'].join(';')];
   for (const p of lista) {
-    const fz = p.parts.map((r) => { const pr = procs.get(String(r.cod_processo)); return `${pr?.sigla || r.cod_processo}${r.turma ? ` (turma ${r.turma})` : ''}: ${SIT[r.situacao]?.[0] || 'sem informação'}`; }).join(' | ');
-    linhas.push([p.cod, p.nome, p.email, p.telefone, p.uf, p.municipio, p.cod_mun || '', p.instituicao, fz, p.parts.filter((r) => r.situacao === 'concluiu').length, p.horas || ''].map(q).join(';'));
+    const fz = p.parts.map((r) => { const pr = procs.get(String(r.cod_processo)); return `${pr?.sigla || r.cod_processo}${r.turma ? ` (turma ${r.turma})` : ''}${r.encontros?.length ? ` (encontros ${r.encontros.join(', ')})` : ''}: ${SIT[r.situacao]?.[0] || 'sem informação'}`; }).join(' | ');
+    linhas.push([p.cod, p.nome, p.email, p.telefone, p.imagem === null ? '' : (p.imagem ? 'sim' : 'não'), p.uf, p.municipio, p.cod_mun || '', p.instituicao, fz, p.parts.filter((r) => r.situacao === 'concluiu').length, p.horas || ''].map(q).join(';'));
   }
   return { csv: '﻿' + linhas.join('\n'), emails: [...new Set(lista.map((p) => p.email).filter(Boolean))] };
 }
@@ -594,10 +631,21 @@ export async function receberPlanilha(S, arquivo) {
   for (const nome of wb.SheetNames) {
     const linhas = X.utils.sheet_to_json(wb.Sheets[nome], { defval: '', raw: true });
     if (!linhas.length) continue;
-    const cols = [...new Set(linhas.flatMap((l) => Object.keys(l)))].filter((c) => !/^__EMPTY/.test(c));
+    // colunas sem nada útil (vazias ou só "anônima", como as do Microsoft Forms) ficam de fora
+    const cols = [...new Set(linhas.flatMap((l) => Object.keys(l)))].filter((c) => !/^__EMPTY/.test(c)
+      && linhas.some((l) => { const t = norm(l[c]); return t && !['anonima', 'anonimo', 'anonymous'].includes(t); }));
     abas[nome] = { cols, linhas };
   }
   if (!Object.keys(abas).length) throw new Error('A planilha está vazia ou não tem cabeçalho na primeira linha.');
+  // lista de presença (padrão): uma linha por pessoa em cada encontro, com o nome do evento
+  const nomesAbas = Object.keys(abas);
+  const pontosLista = (a) => { const m = mapear(a.cols, CAMPOS_LISTA); return m.evento && (m.nome || m.email || m.cpf) ? Object.values(m).filter(Boolean).length : 0; };
+  const abaLista = nomesAbas.slice().sort((a, b) => pontosLista(abas[b]) - pontosLista(abas[a]) || abas[b].linhas.length - abas[a].linhas.length)[0];
+  if (pontosLista(abas[abaLista]) && !mapear(abas[abaLista].cols, CAMPOS_PART).cod_processo) {
+    S.fimp = { modo: 'lista', arquivo: arquivo.name, abas, abaLista, mLista: mapear(abas[abaLista].cols, CAMPOS_LISTA), hash: new Map() };
+    await malha('mun');
+    return { aviso: `Lista de presença lida: ${fmt(abas[abaLista].linhas.length)} respostas. Confira antes de publicar.` };
+  }
   // aba das participações: a que tem pessoa e processo; aba dos processos: a que tem carga ou sigla
   const pontua = (a, campos) => Object.values(mapear(a.cols, campos)).filter(Boolean).length;
   const nomes = Object.keys(abas);
@@ -607,6 +655,299 @@ export async function receberPlanilha(S, arquivo) {
   S.fimp = { arquivo: arquivo.name, abas, abaPart, abaProc, mPart: mapear(abas[abaPart].cols, CAMPOS_PART), mProc: abaProc ? mapear(abas[abaProc].cols, CAMPOS_PROC) : {} };
   try { await malha('mun'); } catch { /* sem a malha, códigos de 6 dígitos não são convertidos */ }
   return { aviso: `Planilha lida: ${Object.keys(abas).length} ${Object.keys(abas).length === 1 ? 'aba' : 'abas'}. Confira as colunas antes de publicar.` };
+}
+
+// ------------------------------------------------------------------ lista de presença (padrão)
+const CAMPOS_LISTA = [
+  ['evento', 'Nome do evento (processo e encontro)', ['nome_do_evento', 'evento', 'nome_da_atividade', 'atividade', 'nome_da_formacao', 'formacao', 'curso'], true],
+  ['nome', 'Nome completo', ['seu_nome_completo', 'nome_completo', 'nome_do_participante', 'nome_participante', 'participante']],
+  ['cpf', 'CPF ou documento (só reconhece a pessoa; não é gravado)', ['seu_numero_de_cpf', 'numero_de_cpf', 'cpf', 'documento']],
+  ['email', 'E-mail', ['seu_melhor_e_mail', 'melhor_e_mail', 'endereco_de_e_mail', 'e_mail', 'email']],
+  ['telefone', 'Telefone', ['seu_telefone', 'telefone', 'celular', 'whatsapp']],
+  ['cidade', 'Cidade', ['sua_cidade', 'cidade', 'municipio']],
+  ['uf', 'Estado (UF)', ['seu_estado', 'estado', 'uf']],
+  ['pais', 'País', ['seu_pais', 'pais']],
+  ['instituicao', 'Instituição', ['representando_uma_instituicao', 'instituicao', 'orgao', 'organizacao']],
+  ['imagem', 'Autoriza uso de imagem', ['uso_da_sua_imagem', 'autoriza_o_uso', 'uso_de_imagem', 'imagem']],
+  ['genero', 'Gênero', ['qual_genero', 'genero', 'sexo']],
+  ['raca', 'Cor ou raça', ['cor_ou_raca', 'raca_cor', 'cor_raca', 'raca']],
+  ['faixa', 'Faixa etária', ['faixa_etaria', 'idade']],
+  ['setor', 'Setor de atuação', ['setor_da_sociedade', 'setor']],
+  ['nota', 'Avaliação da atividade (1 a 5)', ['classifica_a_atividade', 'avaliacao', 'nota']],
+  ['data', 'Data da resposta', ['hora_de_inicio', 'hora_de_conclusao', 'carimbo_de_data', 'data']],
+];
+const ESTADOS = { acre: 'AC', alagoas: 'AL', amapa: 'AP', amazonas: 'AM', bahia: 'BA', ceara: 'CE', distrito_federal: 'DF', espirito_santo: 'ES', goias: 'GO', maranhao: 'MA', mato_grosso: 'MT', mato_grosso_do_sul: 'MS',
+  minas_gerais: 'MG', para: 'PA', paraiba: 'PB', parana: 'PR', pernambuco: 'PE', piaui: 'PI', rio_de_janeiro: 'RJ', rio_grande_do_norte: 'RN', rio_grande_do_sul: 'RS', rondonia: 'RO', roraima: 'RR', santa_catarina: 'SC', sao_paulo: 'SP', sergipe: 'SE', tocantins: 'TO' };
+function siglaUF(v) { const t = norm(v); if (!t) return null; const u = t.toUpperCase(); if (REGIAO_UF[u]) return u; return ESTADOS[t] || null; }
+// "Formação X | Encontro 2" → processo "Formação X", encontro 2
+function separarEvento(v) {
+  const t = texto(v).replace(/\s+/g, ' ').replace(/[.\s]+$/, '');
+  const m = t.match(/^(.*?)\s*[|–—:-]\s*(?:encontro|m[oó]dulo|aula|sess[aã]o|dia|etapa|parte)\s*(?:n[º°o.]?\s*)?(\d{1,3})\s*$/i);
+  return m ? { processo: m[1].trim(), encontro: Number(m[2]) } : { processo: t, encontro: 1 };
+}
+function setorCurto(v) {
+  const t = norm(v);
+  if (!t || t.startsWith('prefiro')) return null;
+  const p = [];
+  if (t.includes('primeiro_setor')) p.push('Primeiro setor (poder público)');
+  if (t.includes('segundo_setor')) p.push('Segundo setor (iniciativa privada)');
+  if (t.includes('terceiro_setor')) p.push('Terceiro setor (sociedade civil)');
+  return p.length ? p.join(' + ') : texto(v).replace(/\s+/g, ' ').slice(0, 80);
+}
+function generoLista(v) { const t = norm(v); if (!t || t.startsWith('prefiro') || t.startsWith('nao_')) return null; if (t === 'feminino' || t === 'mulher' || t === 'f') return 'F'; if (t === 'masculino' || t === 'homem' || t === 'm') return 'M'; return 'O'; }
+function raca(v) { const t = norm(v); return ['branca', 'preta', 'parda', 'amarela', 'indigena'].find((x) => t.startsWith(x)) || null; }
+function faixaEtaria(v) {
+  const t = norm(v); if (!t || t.startsWith('prefiro')) return null;
+  let m;
+  if ((m = t.match(/entre_(\d+)_e_(\d+)/))) return `${m[1]} a ${m[2]} anos`;
+  if ((m = t.match(/(maior|mais|acima)_de_(\d+)/))) return `${m[2]} anos ou mais`;
+  if ((m = t.match(/(menor|menos|abaixo)_de_(\d+)/))) return `Menos de ${m[2]} anos`;
+  return texto(v).slice(0, 30);
+}
+function telefoneBR(v) {
+  let d = texto(v).replace(/\D/g, '');
+  if (!d) return null;
+  if (d.startsWith('55') && d.length >= 12) d = d.slice(2);
+  if (d.startsWith('0')) d = d.replace(/^0+/, '');
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return texto(v).slice(0, 60);
+}
+function instituicaoLimpa(v) {
+  const t = texto(v).replace(/\s+/g, ' ');
+  if (!t || !/[a-z0-9]/i.test(t) || /^(nao|não|nenhuma?|n\/?a|-+|nao se aplica|não se aplica|sem instituicao|sem instituição)$/i.test(t)) return null;
+  return t.slice(0, 160);
+}
+function nomeProprio(v) {
+  const t = texto(v).replace(/\s+/g, ' ');
+  if (!t) return '';
+  return t.toLowerCase().replace(/(^|\s|-)(\p{L})/gu, (m, a, b) => a + b.toUpperCase()).replace(/\s(D[aeo]s?|E)(?=\s)/g, (m) => m.toLowerCase());
+}
+async function sha(t) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('monitoraea-formacoes:' + t));
+  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+// identificadores de cada linha: CPF, e-mail e (só sem os dois) nome + cidade
+function chavesDaLinha(fi, l) {
+  const m = fi.mLista;
+  const g = (k) => (m[k] ? l[m[k]] : '');
+  const out = [];
+  const cpf = texto(g('cpf')).replace(/\D/g, '');
+  if (cpf.length >= 8) out.push('cpf:' + cpf);
+  const em = texto(g('email')).toLowerCase();
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) out.push('em:' + em);
+  if (!out.length) { const nm = norm(g('nome')); if (nm) out.push('nm:' + nm + '|' + norm(g('cidade'))); }
+  return out;
+}
+// calcula (uma vez) os códigos embaralhados de que a montagem precisa
+export async function prepararChaves(S) {
+  const fi = S.fimp;
+  if (!fi || fi.modo !== 'lista') return;
+  const faltam = new Set();
+  const ev = fi.mLista.evento;
+  for (const l of fi.abas[fi.abaLista].linhas) {
+    for (const k of chavesDaLinha(fi, l)) if (!fi.hash.has(k)) faltam.add(k);
+    if (ev) { const pr = 'ev:' + norm(separarEvento(l[ev]).processo); if (!fi.hash.has(pr)) faltam.add(pr); }
+  }
+  await Promise.all([...faltam].map(async (k) => fi.hash.set(k, await sha(k))));
+}
+function indiceMunicipios(m) {
+  if (m.__idx) return m.__idx;
+  const porNomeUF = new Map(); const porNome = new Map();
+  for (const [cd, nm, uf] of m.mun) {
+    const k = norm(nm);
+    porNomeUF.set(k + '|' + uf, cd);
+    porNome.set(k, [...(porNome.get(k) || []), [cd, uf]]);
+  }
+  m.__idx = { porNomeUF, porNome };
+  return m.__idx;
+}
+function montarLista(S) {
+  const fi = S.fimp;
+  const m = fi.mLista;
+  const g = (l, k) => (m[k] ? l[m[k]] : '');
+  const malhaMun = malhas.__munPronta;
+  const idx = malhaMun ? indiceMunicipios(malhaMun) : null;
+  const hoje = new Date();
+  // pessoas já conhecidas, pelas chaves guardadas
+  const conhecidas = new Map();
+  for (const c of S.form?.contatos || []) for (const k of c.chaves || []) conhecidas.set(k, String(c.cod_pessoa));
+  // 1) linhas válidas e grupos de pessoa (quem compartilha CPF ou e-mail é a mesma pessoa)
+  const pai = new Map();
+  const raiz = (k) => { while (pai.get(k) !== k) { pai.set(k, pai.get(pai.get(k))); k = pai.get(k); } return k; };
+  const unir = (a, b) => { a = raiz(a); b = raiz(b); if (a !== b) pai.set(b, a); };
+  const validas = [];
+  let semEvento = 0, semPessoa = 0;
+  for (const l of fi.abas[fi.abaLista].linhas) {
+    const ev = separarEvento(g(l, 'evento'));
+    if (!ev.processo) { semEvento++; continue; }
+    const ks = chavesDaLinha(fi, l).map((k) => 'h' + (fi.hash.get(k) || '').slice(0, 24)).filter((k) => k.length > 1);
+    if (!ks.length) { semPessoa++; continue; }
+    for (const k of ks) if (!pai.has(k)) pai.set(k, k);
+    for (let i = 1; i < ks.length; i++) unir(ks[0], ks[i]);
+    validas.push({ l, ev, ks });
+  }
+  const grupos = new Map();
+  for (const v of validas) { const r = raiz(v.ks[0]); const gr = grupos.get(r) || { ks: new Set(), linhas: [] }; v.ks.forEach((k) => gr.ks.add(k)); gr.linhas.push(v); grupos.set(r, gr); }
+  // 2) código de cada pessoa: o já conhecido ou um novo, estável
+  const codDe = new Map();
+  let reconhecidas = 0;
+  for (const [r, gr] of grupos) {
+    const conhecido = [...gr.ks].map((k) => conhecidas.get(k)).find(Boolean);
+    if (conhecido) reconhecidas++;
+    const melhor = [...gr.ks].sort()[0];
+    codDe.set(r, conhecido || 'p' + melhor.slice(1, 13));
+  }
+  // 3) participações e contatos desta lista
+  const novas = new Map();       // cod_pessoa|cod_processo → participação
+  const contatos = new Map();
+  const procsLista = new Map();  // cod_processo → {nome, encontros:Set, datas:[]}
+  const cidadesNao = new Map();
+  let semCidade = 0, exterior = 0;
+  for (const [r, gr] of grupos) {
+    const cod = codDe.get(r);
+    gr.linhas.sort((a, b) => String(texto(g(a.l, 'data'))).localeCompare(String(texto(g(b.l, 'data')))));
+    for (const { l, ev, ks } of gr.linhas) {
+      const codP = 'e' + (fi.hash.get('ev:' + norm(ev.processo)) || '').slice(0, 10);
+      const pl = procsLista.get(codP) || { cod: codP, nome: ev.processo, encontros: new Set(), datas: [], linhas: 0 };
+      pl.encontros.add(ev.encontro); pl.linhas++;
+      const dt = g(l, 'data'); const mm = mes(dt); if (mm) pl.datas.push(mm);
+      procsLista.set(codP, pl);
+      const ch = cod + '|' + codP;
+      const p = novas.get(ch) || { cod_pessoa: cod, cod_processo: codP, papel: 'formando', encontros: [], notas: [] };
+      if (!p.encontros.includes(ev.encontro)) p.encontros.push(ev.encontro);
+      // atributos: vale a resposta mais recente
+      const pais = norm(g(l, 'pais'));
+      const fora = pais && !['brasil', 'brazil', 'br'].includes(pais);
+      if (fora) { exterior++; delete p.uf; delete p.cod_mun; p.regiao = 'Exterior'; }
+      else {
+        let uf = siglaUF(g(l, 'uf'));
+        // "Ceilândia-DF", "Santos/SP": separa a UF escrita junto da cidade
+        const cidTxt = texto(g(l, 'cidade')).replace(/\s*[-–/,(]\s*([A-Za-z]{2})\)?\s*$/, (m0, u) => { if (!uf && REGIAO_UF[u.toUpperCase()]) uf = u.toUpperCase(); return REGIAO_UF[u.toUpperCase()] ? '' : m0; });
+        const cid = norm(cidTxt);
+        let cm = null;
+        if (cid && idx) {
+          if (uf) cm = idx.porNomeUF.get(cid + '|' + uf) || null;
+          if (!cm) { const ops = idx.porNome.get(cid) || []; if (ops.length === 1 && (!uf || ops[0][1] === uf || !idx.porNomeUF.has(cid + '|' + uf))) { cm = ops[0][0]; uf = ops[0][1]; } }
+          // regiões administrativas do DF (Ceilândia, Sobradinho...) ficam em Brasília, o único município do DF
+          if (!cm && uf === 'DF') cm = '5300108';
+          if (!cm) { const k = `${texto(g(l, 'cidade'))}${uf ? ' (' + uf + ')' : ''}`; cidadesNao.set(k, (cidadesNao.get(k) || 0) + 1); }
+        } else if (!cid) semCidade++;
+        if (uf) { p.uf = uf; p.regiao = REGIAO_UF[uf]; }
+        if (cm) p.cod_mun = cm;
+      }
+      const gn = generoLista(g(l, 'genero')); if (gn) p.genero = gn;
+      const rc = raca(g(l, 'raca')); if (rc) p.raca = rc;
+      const fx = faixaEtaria(g(l, 'faixa')); if (fx) p.faixa = fx;
+      const st = setorCurto(g(l, 'setor')); if (st) p.setor = st;
+      const ins = instituicaoLimpa(g(l, 'instituicao')); if (ins) p.instituicao = ins;
+      const nt = numero(g(l, 'nota')); if (nt !== null && nt >= 1 && nt <= 5) p.notas.push(nt);
+      novas.set(ch, p);
+      const c = contatos.get(cod) || { cod_pessoa: cod, chaves: new Set() };
+      ks.forEach((k) => c.chaves.add(k));
+      const nm = nomeProprio(g(l, 'nome')); if (nm) c.nome = nm;
+      const em = texto(g(l, 'email')).toLowerCase(); if (/@/.test(em)) c.email = em;
+      const tel = telefoneBR(g(l, 'telefone')); if (tel) c.telefone = tel;
+      const im = simNao(g(l, 'imagem')); if (im !== null) c.autoriza_imagem = im;
+      contatos.set(cod, c);
+    }
+  }
+  for (const p of novas.values()) { p.encontros.sort((a, b) => a - b); if (p.notas.length) p.nota = Math.round((p.notas.reduce((t, x) => t + x, 0) / p.notas.length) * 10) / 10; delete p.notas; }
+  // 4) junta com o que já está publicado: troca só os encontros que vieram nesta lista
+  const ant = S.form?.versao?.dados || { processos: [], participacoes: [] };
+  const vieram = new Map([...procsLista.values()].map((p) => [p.cod, p.encontros]));
+  const participacoes = [];
+  let mantidas = 0, atualizadas = 0, novasN = 0;
+  for (const r0 of ant.participacoes) {
+    const r = { ...r0 };
+    const enc = vieram.get(String(r.cod_processo));
+    const nova = novas.get(r.cod_pessoa + '|' + r.cod_processo);
+    if (enc && r.encontros) r.encontros = r.encontros.filter((n) => !enc.has(n));
+    if (nova) {
+      const juntos = [...new Set([...(r.encontros || []), ...nova.encontros])].sort((a, b) => a - b);
+      participacoes.push({ ...r, ...nova, encontros: juntos, nota: nova.nota ?? r.nota });
+      novas.delete(r.cod_pessoa + '|' + r.cod_processo);
+      atualizadas++;
+    } else if (!enc || !r.encontros || r.encontros.length) { participacoes.push(r); mantidas++; }
+  }
+  for (const p of novas.values()) { participacoes.push(p); novasN++; }
+  for (const r of participacoes) { delete r.situacao; for (const k of Object.keys(r)) if (r[k] === undefined || r[k] === null) delete r[k]; }
+  const procs = new Map((ant.processos || []).map((p) => [String(p.cod), { ...p }]));
+  const procNovos = [];
+  for (const pl of procsLista.values()) {
+    const p = procs.get(pl.cod) || { cod: pl.cod, sigla: pl.nome.slice(0, 120), nome: pl.nome.length > 120 ? pl.nome : undefined, origem: 'lista' };
+    if (!procs.has(pl.cod)) procNovos.push(p);
+    const maxEnc = Math.max(...pl.encontros);
+    p.origem = 'lista';
+    p.encontros = Math.max(p.encontros || 0, maxEnc);
+    const ds = pl.datas.sort();
+    if (ds.length) { if (!p.inicio || ds[0] < p.inicio) p.inicio = ds[0]; if (!p.fim || ds[ds.length - 1] > p.fim) p.fim = ds[ds.length - 1]; }
+    if (p.carga_encontro) p.carga_total = p.encontros * p.carga_encontro;
+    for (const k of Object.keys(p)) if (p[k] === undefined) delete p[k];
+    procs.set(pl.cod, p);
+  }
+  const processos = [...procs.values()];
+  const dados = derivar({ processos, participacoes });
+  // 5) pendências
+  const pend = verificar(dados);
+  if (cidadesNao.size) pend.unshift({ tipo: 'aviso', fonte: 'planilha', texto: `Cidades não reconhecidas na malha do IBGE: ${[...cidadesNao.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([c, n]) => `${c}${n > 1 ? ` ×${n}` : ''}`).join('; ')}${cidadesNao.size > 8 ? '…' : ''}`, n: [...cidadesNao.values()].reduce((t, n) => t + n, 0), acao: 'Essas respostas ficam sem município. Confira a grafia e a UF' });
+  if (semCidade) pend.push({ tipo: 'aviso', fonte: 'planilha', texto: 'Respostas sem cidade', n: semCidade, acao: 'Ficam sem município no mapa' });
+  if (exterior) pend.push({ tipo: 'aviso', fonte: 'planilha', texto: 'Respostas de fora do Brasil', n: exterior, acao: 'Contam nos números, fora do mapa' });
+  if (semPessoa) pend.push({ tipo: 'erro', fonte: 'planilha', texto: 'Respostas sem nome, e-mail ou CPF', n: semPessoa, acao: 'Não entram: não há como saber quem é' });
+  if (semEvento) pend.push({ tipo: 'aviso', fonte: 'planilha', texto: 'Respostas sem nome do evento', n: semEvento, acao: 'Não entram' });
+  const ctt = [...contatos.values()].map((c) => ({ ...c, chaves: [...c.chaves] }));
+  const semEmail = ctt.filter((c) => !c.email).length;
+  if (semEmail) pend.push({ tipo: 'aviso', fonte: 'planilha', texto: 'Pessoas sem e-mail', n: semEmail, acao: 'Completar o contato depois, se possível' });
+  const resumo = {
+    participacoes: participacoes.length, pessoas: new Set(participacoes.map((r) => r.cod_pessoa)).size, processos: processos.length,
+    ufs: new Set(participacoes.map((r) => r.uf).filter(Boolean)).size, municipios: new Set(participacoes.map((r) => r.cod_mun).filter(Boolean)).size,
+    pendencias: pend.filter((p) => p.fonte === 'planilha').map(({ fonte, ...p }) => ({ ...p, fonte: 'planilha' })),
+    alertas: contarAlertas(pend.filter((p) => p.fonte !== 'planilha')),
+  };
+  resumo.lista = pend;
+  const respostas = validas.length;
+  return { dados, contatos: ctt, resumo, lista: { procs: [...procsLista.values()], procNovos, respostas, pessoas: grupos.size, reconhecidas, novasN, atualizadas, mantidas, primeira: !ant.participacoes.length } };
+}
+async function pagLista(S, cab, envio) {
+  const fi = S.fimp;
+  malhas.__munPronta = await malha('mun');
+  await prepararChaves(S);
+  const { resumo, lista: L, dados } = montarLista(S);
+  const cols = fi.abas[fi.abaLista].cols;
+  const sel = (k, atual) => `<select data-fm-col="lista:${k}" aria-label="Coluna para ${k}"><option value="">— não usar —</option>${cols.map((c) => `<option value="${e(c)}"${c === atual ? ' selected' : ''}>${e(c.length > 70 ? c.slice(0, 68) + '…' : c)}</option>`).join('')}</select>`;
+  const mapa = CAMPOS_LISTA.map(([k, rot, , obrig]) => `<tr><td>${fi.mLista[k] ? icone('ok') : icone(obrig ? 'er' : 'wa')}</td><td><b style="font-weight:500">${e(rot)}</b>${obrig ? ' <span class="xs muted">obrigatória</span>' : ''}</td><td>${sel(k, fi.mLista[k])}</td></tr>`).join('');
+  const falta = !fi.mLista.evento || !(fi.mLista.nome || fi.mLista.email || fi.mLista.cpf) || !L.respostas;
+  const procMap = new Map(dados.processos.map((p) => [p.cod, p]));
+  const novosCods = new Set(L.procNovos.map((p) => p.cod));
+  const procs = L.procs.map((pl) => {
+    const p = procMap.get(pl.cod);
+    const parts = dados.participacoes.filter((r) => r.cod_processo === pl.cod);
+    return `<tr><td><b style="font-weight:600">${e(p.sigla)}</b>${novosCods.has(pl.cod) ? ' <span class="fm-pill and">novo</span>' : ''}</td>
+      <td>${[...pl.encontros].sort((a, b) => a - b).map((n) => `encontro ${n}`).join(', ')}${p.encontros > 1 ? `<div class="xs muted">${p.encontros} encontros até agora</div>` : ''}</td>
+      <td class="n">${fmt(pl.linhas)}</td><td class="n">${fmt(parts.length)}</td>
+      <td class="xs">${parts.filter((r) => r.situacao === 'concluiu').length} concluíram${parts.some((r) => r.situacao === 'cursando') ? ` · ${parts.filter((r) => r.situacao === 'cursando').length} cursando` : ''}</td></tr>`;
+  }).join('');
+  const cartao = (n, t) => `<div><b>${n}</b><span>${t}</span></div>`;
+  const pend = resumo.lista;
+  return `<main class="page fm" style="max-width:1080px">${cab}
+    <section class="card fm-bx">${envio}</section>
+    <section class="card fm-bx"><h2>O que esta lista traz</h2><p class="s">${L.primeira ? 'Ainda não há dados publicados: esta lista começa o painel' : `Soma aos dados publicados em ${dataLonga(S.form.versao.criado_em)}. Só os encontros desta lista são trocados; o resto fica como está`}</p>
+      <div class="fm-dif">${cartao(fmt(L.respostas), 'respostas lidas')}${cartao(fmt(L.pessoas), 'pessoas')}${cartao(fmt(L.pessoas - L.reconhecidas), 'pessoas novas na base')}${cartao(fmt(L.procNovos.length), L.procNovos.length === 1 ? 'processo novo' : 'processos novos')}</div>
+      <div class="fm-rolar" style="margin-top:14px"><table class="fm-tb grande"><thead><tr><th>Processo (nome do evento)</th><th>Encontros nesta lista</th><th class="n">Respostas</th><th class="n">Pessoas no processo</th><th>Situação</th></tr></thead><tbody>${procs}</tbody></table></div>
+      <p class="xs muted" style="margin-top:10px">Depois de publicar, informe as horas por encontro e, se for o caso, quantos encontros o processo terá e o mínimo para concluir: em Formações, no processo, clique em Editar.</p></section>
+    <div class="fm-g11">
+      <section class="card fm-bx"><h2>Colunas reconhecidas</h2><p class="s">Se alguma estiver errada, escolha a coluna certa.</p>
+        ${Object.keys(fi.abas).length > 1 ? `<div class="f" style="margin-bottom:10px"><label for="fm-aba-l" class="xs muted">Aba com as respostas</label><select id="fm-aba-l" data-fm-aba="lista">${Object.keys(fi.abas).map((n) => `<option value="${e(n)}"${n === fi.abaLista ? ' selected' : ''}>${e(n)}</option>`).join('')}</select></div>` : ''}
+        <table class="fm-tb fm-map-cols"><tbody>${mapa}</tbody></table>
+        <p class="xs muted" style="margin-top:8px">Comentários livres e horários de conclusão não entram na plataforma.</p></section>
+      <section class="card fm-bx"><h2>Pontos para conferir</h2><p class="s">${pend.length ? 'Nada aqui impede a publicação' : 'Nenhum problema encontrado'}</p>
+        <table class="fm-tb"><tbody>${pend.map((p) => `<tr><td style="width:24px">${icone(p.tipo === 'erro' ? 'er' : 'wa')}</td><td>${e(p.texto)}<div class="xs muted">${e(p.acao || '')}</div></td><td class="n">${fmt(p.n)}</td></tr>`).join('') || `<tr><td>${icone('ok')}</td><td>Tudo certo.</td></tr>`}</tbody></table></section>
+    </div>
+    <form class="card fm-bx fm-pub" data-form="fm-publicar">
+      <div class="f" style="flex:1 1 400px"><label for="fm-nota">Nota da atualização <span class="muted" style="font-weight:400">(aparece no histórico)</span></label><input id="fm-nota" name="nota" type="text" maxlength="300" placeholder="Ex.: Lista do encontro 3 da formação com a CECSA-SP"></div>
+      <div style="display:flex;gap:10px;align-items:flex-end"><button type="button" class="btn" data-acao="fm-cancelar">Cancelar</button><button class="btn pri" type="submit"${falta ? ' disabled' : ''}>Publicar</button></div>
+      <p class="xs muted" style="flex-basis:100%">${falta ? 'Para publicar, indique a coluna do nome do evento e ao menos uma coluna que identifique a pessoa (nome, e-mail ou CPF).' : 'A versão anterior fica guardada e pode ser restaurada. O CPF não é gravado. Nomes e contatos ficam visíveis só para perfis de edição.'}</p>
+    </form></main>`;
 }
 
 // ---- conversão dos valores
@@ -704,6 +1045,10 @@ function montar(S) {
     }
   }
   for (const r of participacoes) if (!procs.has(r.cod_processo)) procs.set(r.cod_processo, { ...(atuais.get(r.cod_processo) || {}), cod: r.cod_processo, sigla: atuais.get(r.cod_processo)?.sigla || r.cod_processo });
+  // consolida: processos que não estão nesta planilha (por exemplo, os que vieram de listas de presença) continuam como estão
+  const naPlanilha = new Set([...procs.keys()].filter((c) => participacoes.some((r) => r.cod_processo === c)));
+  for (const r of S.form?.versao?.dados.participacoes || []) if (!naPlanilha.has(String(r.cod_processo))) participacoes.push({ ...r });
+  for (const [c, p] of atuais) if (!procs.has(c)) procs.set(c, p);
   const processos = [...procs.values()];
 
   // inconsistências (as mesmas do painel) e pendências que só a planilha revela
@@ -745,17 +1090,23 @@ export async function pagFormacoesAtualizar(S) {
   try { const m = await malha('mun'); if (!malhas.munPronta) malhas.munPronta = { sete: new Set(m.mun.map((x) => x[0])), seis: new Map(m.mun.map((x) => [x[0].slice(0, 6), x[0]])), uf: new Map(m.mun.map((x) => [x[0], x[2]])) }; } catch { /* segue sem validar municípios */ }
   const fi = S.fimp;
   const passo = (n, t, est) => `<div class="${est}"><b>${est === 'ok' ? icone('ok').replace('#1E7A43', '#fff') : n}</b>${t}</div>`;
-  const cab = `<div class="ph"><div class="txt"><div class="xs muted" style="margin-bottom:4px"><a href="#/formacoes">Formações</a> / Atualizar dados</div><h1>Atualizar dados de formação</h1><p class="sub">Envie a planilha de sempre. A plataforma confere, mostra o que muda e só publica depois que você confirmar.</p></div>
-    <div class="acoes-ph"><button type="button" class="btn" data-acao="fm-modelo">Baixar planilha modelo</button></div></div>
+  const cab = `<div class="ph"><div class="txt"><div class="xs muted" style="margin-bottom:4px"><a href="#/formacoes">Formações</a> / Atualizar dados</div><h1>Atualizar dados de formação</h1><p class="sub">Envie a lista de presença exportada do formulário. A plataforma confere, mostra o que muda e só publica depois que você confirmar.</p></div>
+    <div class="acoes-ph"><button type="button" class="btn" data-acao="fm-modelo">Baixar modelo da lista</button></div></div>
     <div class="fm-step" aria-label="Etapas">${passo(1, 'Enviar planilha', fi ? 'ok' : 'at')}<i></i>${passo(2, 'Conferir', fi ? 'at' : '')}<i></i>${passo(3, 'Publicar', '')}</div>`;
   const envio = `<label class="fm-drop${fi ? ' feito' : ''}">${fi ? icone('ok') : '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"></path></svg>'}
-    <div style="flex:1;min-width:0">${fi ? `<b>${e(fi.arquivo)}</b><div class="xs muted">${Object.keys(fi.abas).length} ${Object.keys(fi.abas).length === 1 ? 'aba' : 'abas'}: ${Object.entries(fi.abas).map(([n, a]) => `${e(n)} (${fmt(a.linhas.length)} linhas)`).join(', ')}</div>` : '<b>Escolha a planilha (.xlsx, .xls ou .csv)</b><div class="xs muted">Uma aba com uma linha por pessoa em cada processo e, se houver, uma aba com os processos</div>'}</div>
+    <div style="flex:1;min-width:0">${fi ? `<b>${e(fi.arquivo)}</b><div class="xs muted">${Object.keys(fi.abas).length} ${Object.keys(fi.abas).length === 1 ? 'aba' : 'abas'}: ${Object.entries(fi.abas).map(([n, a]) => `${e(n)} (${fmt(a.linhas.length)} linhas)`).join(', ')}</div>` : '<b>Escolha a lista de presença (.xlsx ou .csv)</b><div class="xs muted">A exportação das respostas do formulário, sem precisar mexer</div>'}</div>
     <span class="btn sm">${fi ? 'Trocar arquivo' : 'Escolher arquivo'}</span><input type="file" data-fm-arquivo accept=".xlsx,.xls,.csv,.ods" aria-label="Planilha de formações"></label>`;
   if (!fi) {
     return `<main class="page fm" style="max-width:1080px">${cab}<section class="card fm-bx">${envio}</section>
-      <section class="card fm-bx"><h2>O que a planilha precisa ter</h2><p class="s">Os nomes das colunas não precisam ser exatos: a plataforma reconhece variações e, se errar, você escolhe a coluna certa na próxima etapa.</p>
-      <ul class="fm-ul"><li><b>Obrigatórias:</b> código da pessoa e código do processo.</li><li><b>Recomendadas:</b> UF, código IBGE do município (7 dígitos), região, gênero, setor, instituição e se representa uma CIEA.</li><li><b>Aba de processos (opcional):</b> código, sigla, descrição, início, fim, turmas, carga horária por turma e total, modalidade.</li><li><b>Para encontrar pessoas:</b> nome, e-mail, telefone, turma, se concluiu e a carga horária cursada.</li><li>Nomes e contatos ficam numa área à parte, que só perfis de edição enxergam. Perfis de leitura veem só os números.</li></ul></section></main>`;
+      <section class="card fm-bx"><h2>Padrão: a lista de presença do formulário</h2><p class="s">Exporte as respostas do formulário de presença (Microsoft Forms) para Excel e envie aqui, do jeito que sai. Pode enviar a lista de um encontro só ou de vários eventos juntos.</p>
+      <ul class="fm-ul"><li><b>Nome do evento:</b> vira o processo formativo. Quando termina em "| Encontro 2" (ou Módulo, Aula, Dia, Sessão, Etapa), a plataforma junta os encontros no mesmo processo.</li>
+      <li><b>Pessoa:</b> reconhecida pelo CPF, pelo e-mail ou, sem os dois, pelo nome. Assim a mesma pessoa em listas diferentes vira uma só. <b>O CPF nunca é gravado</b>: serve só para reconhecer a pessoa e é guardado embaralhado.</li>
+      <li><b>Cidade e estado:</b> viram o município oficial do IBGE. Nomes que a plataforma não reconhecer aparecem para conferir.</li>
+      <li><b>Somam ao que já existe:</b> cada lista acrescenta ou atualiza só os encontros que traz. Enviar a mesma lista duas vezes não duplica nada.</li>
+      <li>Nomes, e-mails, telefones e autorização de imagem ficam numa área à parte, que só perfis de edição enxergam. Perfis de leitura veem só os números.</li>
+      <li>A planilha antiga, com códigos de pessoa e de processo, continua aceita.</li></ul></section></main>`;
   }
+  if (fi.modo === 'lista') return pagLista(S, cab, envio);
   const { resumo, dif } = montar(S);
   const sel = (grupo, k, cols, atual) => `<select data-fm-col="${grupo}:${k}" aria-label="Coluna para ${k}"><option value="">— não usar —</option>${cols.map((c) => `<option value="${e(c)}"${c === atual ? ' selected' : ''}>${e(c)}</option>`).join('')}</select>`;
   const linhasMapa = (grupo, campos, m, cols) => campos.map(([k, rot, , obrig]) => `<tr><td>${m[k] ? icone('ok') : icone(obrig ? 'er' : 'wa')}</td><td><b style="font-weight:500">${e(rot)}</b>${obrig ? ' <span class="xs muted">obrigatória</span>' : ''}</td><td>${sel(grupo, k, cols, m[k])}</td></tr>`).join('');
@@ -845,14 +1196,13 @@ export const acoes = {
   },
   async 'fm-cancelar'(S) { S.fimp = null; location.hash = '#/formacoes'; return {}; },
   async 'fm-modelo'() {
-    const cab = ['codigo', 'Nome', 'email', 'Telefone', 'cod_formacao', 'Turma', 'Situação', 'Carga horária cursada', 'UF', 'cod_mun', 'Região', 'Gênero', 'Setor', 'Instituição', 'Representando CIEA'];
-    const ex = ['30001', 'Nome da Pessoa', 'pessoa@exemplo.org', '(11) 90000-0000', '20004', '5', 'Concluiu', '16', 'SP', '3550308', 'SUDESTE', 'F', 'GOVERNO', 'Secretaria Municipal de Meio Ambiente', 'SIM'];
-    const proc = ['cod_formacao;sigla;descricao;inicio;fim;turmas;carga_horaria_turma;carga_horaria_total;modalidade', '20004;MonitoraEA_CIEAS;Capacidade adaptativa em perspectiva policêntrica;02/2023;12/2026;5;16;80;Híbrido'];
-    const csv = '﻿' + [cab.join(';'), ex.join(';')].join('\n');
-    const baixar = (nome, conteudo) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([conteudo], { type: 'text/csv;charset=utf-8' })); a.download = nome; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
-    baixar('modelo-participacoes.csv', csv);
-    setTimeout(() => baixar('modelo-processos.csv', '﻿' + proc.join('\n')), 300);
-    return { semRender: true, aviso: 'Modelos baixados: participações e processos (CSV). Também dá para usar uma planilha .xlsx com as duas abas.' };
+    const cab = ['Nome do evento.', 'Seu nome completo', 'Seu número de CPF', 'Seu melhor e-mail', 'Seu telefone', 'Sua cidade.', 'Seu estado', 'Seu país.', 'Se você está representando uma instituição, cite aqui o nome dela.', 'Você autoriza o uso da sua imagem?', 'Com qual gênero você se identifica?', 'Com qual cor ou raça você se identifica?', 'Qual a sua faixa etária?', 'Sua atuação hoje é em qual setor da sociedade?', 'Como você classifica a atividade de hoje?', 'Hora de início'];
+    const ex = ['Formação MonitoraEA + CECSA-SP | Encontro 1', 'Nome da Pessoa', '000.000.000-00', 'pessoa@exemplo.org', '(11) 90000-0000', 'São Paulo', 'SP', 'Brasil', 'Secretaria Municipal de Meio Ambiente', 'Sim', 'Feminino', 'Parda', 'Entre 15 e 64 anos', 'Primeiro Setor - órgãos públicos', '5', '2026-10-30 14:00'];
+    const q = (t) => `"${String(t).replace(/"/g, '""')}"`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\uFEFF' + [cab.map(q).join(';'), ex.map(q).join(';')].join('\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'modelo-lista-de-presenca.csv'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    return { semRender: true, aviso: 'Modelo baixado. No dia a dia, basta exportar as respostas do formulário para Excel e enviar.' };
   },
 };
 export const formularios = {
@@ -877,7 +1227,8 @@ export const formularios = {
       const novo = String(fd.get(k) || '').trim() || null;
       if (novo !== (atual[k] ?? null)) campos[k] = novo;
     }
-    for (const k of ['turmas', 'carga_turma', 'carga_total']) {
+    for (const k of ['turmas', 'carga_turma', 'carga_total', 'encontros', 'min_encontros', 'carga_encontro']) {
+      if (!fd.has(k)) continue;
       const t = String(fd.get(k) ?? '').trim();
       const novo = t === '' ? null : Number(t);
       if (novo !== null && (!Number.isFinite(novo) || novo < 0)) throw new Error('Use números positivos em turmas e carga horária.');
@@ -894,7 +1245,7 @@ export const formularios = {
       for (const k of Object.keys(corrigido)) if (corrigido[k] === null) delete corrigido[k];
       const processos = (v.dados.processos || []).some((p) => String(p.cod) === cod)
         ? v.dados.processos.map((p) => (String(p.cod) === cod ? corrigido : p)) : [...(v.dados.processos || []), corrigido];
-      const lista = verificar({ processos, participacoes: v.dados.participacoes });
+      const lista = verificar(derivar({ processos, participacoes: v.dados.participacoes.map((r) => ({ ...r })) }));
       restam = lista.filter((x) => x.cod === cod);
       const resumo = { ...(v.resumo || {}), alertas: contarAlertas(lista) };
       await S.api.formacaoCorrigir(cod, campos, String(fd.get('nota') || '').trim(), resumo);
@@ -907,7 +1258,8 @@ export const formularios = {
   },
   async 'fm-publicar'(S, fd) {
     if (!S.fimp) throw new Error('Envie a planilha primeiro.');
-    const { dados, resumo, contatos } = montar(S);
+    if (S.fimp.modo === 'lista') await prepararChaves(S);
+    const { dados, resumo, contatos } = S.fimp.modo === 'lista' ? montarLista(S) : montar(S);
     if (!dados.participacoes.length) throw new Error('Nenhuma participação reconhecida. Confira as colunas obrigatórias.');
     const { lista, ...gravar } = resumo;
     await S.api.formacaoPublicar(dados, S.fimp.arquivo, String(fd.get('nota') || '').trim(), gravar, contatos);
@@ -926,6 +1278,8 @@ export function atualizarConta(form) {
 // mudanças nos seletores da conferência
 export function mudarColuna(S, el) {
   if (!S.fimp) return;
+  if (el.dataset.fmAba === 'lista') { S.fimp.abaLista = el.value; S.fimp.mLista = mapear(S.fimp.abas[el.value].cols, CAMPOS_LISTA); return; }
+  if (el.dataset.fmCol?.startsWith('lista:')) { S.fimp.mLista[el.dataset.fmCol.slice(6)] = el.value; return; }
   if (el.dataset.fmAba) {
     const aba = el.value;
     if (el.dataset.fmAba === 'part') { S.fimp.abaPart = aba; S.fimp.mPart = mapear(S.fimp.abas[aba].cols, CAMPOS_PART); }

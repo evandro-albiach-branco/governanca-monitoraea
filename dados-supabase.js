@@ -106,7 +106,7 @@ export function criarBackendSupabase(url, chave) {
       // nomes e contatos: o banco só entrega a perfis de edição; vem em páginas de 1000
       const contatos = [];
       for (let de = 0; de < 200000; de += 1000) {
-        const r = await sb.from('formacao_contatos').select('cod_pessoa, nome, email, telefone').order('cod_pessoa').range(de, de + 999);
+        const r = await sb.from('formacao_contatos').select('cod_pessoa, nome, email, telefone, autoriza_imagem, chaves').order('cod_pessoa').range(de, de + 999);
         if (r.error) break;   // tabela ainda não criada: segue sem nomes
         contatos.push(...r.data);
         if (r.data.length < 1000) break;

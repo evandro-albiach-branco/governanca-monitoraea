@@ -1,11 +1,12 @@
 // Telas da plataforma. Cada página devolve HTML; as ações ficam em
+const VERSAO_SITE = '20261109c';
 // `acoes` (cliques em [data-acao]) e `formularios` (envios de form[data-form]).
 import {
   e, FASES, FASE, FRENTES, FRENTE, TIPO, PRIORIDADE, PERFIL, SIT_ATRIB, PARCEIRAS, LOGO,
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
   LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub, podeExcluirItem,
-} from './util.js?v=20261109a';
+} from './util.js?v=20261109c';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
@@ -109,6 +110,7 @@ export function moldura(S, rota, conteudo) {
       ${nv('sintese', 'Síntese')}${nv('painel', 'Painel')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${nv('formacoes', 'Formações', S.d.formacoesAlertas?.erros || 0, true)}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${nv('equipe', 'Equipe')}
     </nav>
     ${ghLink ? `<div class="ext-gh"><span class="ext-t">Desenvolvimento</span>${ghLink}</div>` : ''}
+    <div class="nv-versao" title="Versão do site carregada neste navegador">versão ${VERSAO_SITE}</div>
     <div class="foot">
       <div class="me">${avatar(S.eu, 'eu')}<div class="me-t"><span title="${e(S.eu.nome)}">${e(S.eu.nome)}</span><small>${e(siglaDe(inst))}, ${e(PERFIL[S.eu.perfil].toLowerCase())}</small></div>
         <button type="button" class="sair" data-acao="sair" aria-label="Sair da plataforma" title="Sair">${svg('sair', 17)}</button></div>
