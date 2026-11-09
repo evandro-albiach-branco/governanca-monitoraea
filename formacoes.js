@@ -1,9 +1,9 @@
 // Formações: painel dos processos formativos e atualização por planilha.
 // Os mapas usam a malha oficial do IBGE (Malha Municipal Digital 2025), já simplificada
 // e convertida em caminhos SVG nos arquivos malha-uf.json e malha-municipios.json.
-import { e, dataLonga, dataCurta, quando, siglaDe, podeEditar } from './util.js?v=20261109f';
+import { e, dataLonga, dataCurta, quando, siglaDe, podeEditar } from './util.js?v=20261109g';
 
-const V = '20261109f';
+const V = '20261109g';
 // banco desatualizado: formacoes.sql não foi rodado de novo depois da última atualização do site
 const avisoBanco = (S) => (S.form?.bancoDesatualizado ? `<div class="fm-alerta" role="alert">${icone('er')}<div style="flex:1;min-width:0"><b>O banco de dados ainda não recebeu a última atualização</b>
   <div>O site já está na versão nova, mas o Supabase não. Sem isso, nomes, contatos e o envio de listas não funcionam direito. No Supabase, abra <b>SQL Editor</b>, cole o arquivo <b>formacoes.sql</b> (do GitHub) e clique em <b>Run</b>. Ele não apaga nada. Depois, recarregue esta página.</div></div></div>` : '');
@@ -151,23 +151,29 @@ export function verificar(dados) {
   const cods = new Set(procs.map((p) => String(p.cod)));
   const orfas = parts.filter((r) => !cods.has(String(r.cod_processo))).length;
   if (orfas) out.push({ tipo: 'aviso', texto: 'Participações de processos sem cadastro na aba de processos', n: orfas, acao: 'Incluir o processo (código, datas e carga)' });
+  // "quem": as pessoas (e o processo) de cada problema, para a lista "Ver quem"
+  const q = (r, obs) => ({ p: String(r.cod_pessoa), proc: String(r.cod_processo), obs });
   const chaves = conta(parts, (r) => `${r.cod_pessoa}|${r.cod_processo}`);
-  const dup = [...chaves.values()].filter((n) => n > 1).reduce((t, n) => t + n - 1, 0);
-  if (dup) out.push({ tipo: 'erro', texto: 'Mesma pessoa mais de uma vez no mesmo processo', n: dup, acao: 'Unificar os registros na planilha' });
-  const munFora = parts.filter((r) => r.cod_mun && r.uf && UF_IBGE[r.cod_mun.slice(0, 2)] !== r.uf).length;
-  if (munFora) out.push({ tipo: 'erro', texto: 'Município de outra UF (o código IBGE não bate com a UF informada)', n: munFora, acao: 'Conferir a UF ou o código do município' });
-  const regFora = parts.filter((r) => r.uf && r.regiao && REGIAO_UF[r.uf] && REGIAO_UF[r.uf] !== r.regiao).length;
-  if (regFora) out.push({ tipo: 'aviso', texto: 'Região diferente da região da UF', n: regFora, acao: 'Conferir a UF ou a região' });
+  const repetidas = [...chaves.entries()].filter(([, n]) => n > 1);
+  const dup = repetidas.reduce((t, [, n]) => t + n - 1, 0);
+  if (dup) out.push({ tipo: 'erro', id: 'dup', texto: 'Mesma pessoa mais de uma vez no mesmo processo', n: dup, acao: 'Juntar os registros repetidos (botão abaixo) ou corrigir a planilha',
+    quem: repetidas.map(([k, n]) => { const [pe, pr] = k.split('|'); return { p: pe, proc: pr, obs: `${n} registros` }; }) });
+  const munForaL = parts.filter((r) => r.cod_mun && r.uf && UF_IBGE[r.cod_mun.slice(0, 2)] !== r.uf);
+  if (munForaL.length) out.push({ tipo: 'erro', id: 'munfora', texto: 'Município de outra UF (o código IBGE não bate com a UF informada)', n: munForaL.length, acao: 'Conferir a UF ou o município na planilha',
+    quem: munForaL.map((r) => q(r, `UF informada ${r.uf}, município de ${UF_IBGE[r.cod_mun.slice(0, 2)] || '?'}`)) });
+  const regForaL = parts.filter((r) => r.uf && r.regiao && REGIAO_UF[r.uf] && REGIAO_UF[r.uf] !== r.regiao);
+  if (regForaL.length) out.push({ tipo: 'aviso', id: 'regiao', texto: 'Região diferente da região da UF', n: regForaL.length, acao: 'Conferir a UF ou a região', quem: regForaL.map((r) => q(r, `${r.uf}, região ${r.regiao}`)) });
   const generos = new Map();
   for (const r of parts) if (r.genero) { const g = generos.get(r.cod_pessoa) || new Set(); g.add(r.genero); generos.set(r.cod_pessoa, g); }
-  const genDiv = [...generos.values()].filter((g) => g.size > 1).length;
-  if (genDiv) out.push({ tipo: 'aviso', texto: 'Mesma pessoa com gênero diferente em processos diferentes', n: genDiv, acao: 'Conferir o cadastro da pessoa' });
-  const semUF = parts.filter((r) => !r.uf).length;
-  if (semUF) out.push({ tipo: 'aviso', texto: 'Participantes sem UF', n: semUF, acao: 'Usar a sigla da UF (ex.: SP)' });
+  const genDivL = [...generos.entries()].filter(([, g]) => g.size > 1);
+  if (genDivL.length) out.push({ tipo: 'aviso', id: 'genero', texto: 'Mesma pessoa com gênero diferente em processos diferentes', n: genDivL.length, acao: 'Conferir o cadastro da pessoa',
+    quem: genDivL.map(([pe, g]) => ({ p: String(pe), proc: '', obs: [...g].join(' e ') })) });
+  const semUFL = parts.filter((r) => !r.uf && r.regiao !== 'Exterior');
+  if (semUFL.length) out.push({ tipo: 'aviso', id: 'semuf', texto: 'Participantes sem UF', n: semUFL.length, acao: 'Usar a sigla da UF (ex.: SP)', quem: semUFL.map((r) => q(r)) });
   if (!parts.some((r) => r.cod_mun)) out.push({ tipo: 'aviso', texto: 'Dados sem município', n: parts.length, acao: 'Envie a planilha com o nome do município (o código IBGE é achado sozinho) ou a lista de presença' });
-  else { const sem = parts.filter((r) => !r.cod_mun).length; if (sem) out.push({ tipo: 'aviso', texto: 'Participantes sem município', n: sem, acao: 'Completar a cidade na planilha' }); }
-  const outros = parts.filter((r) => /^outros?$/i.test(r.instituicao || '')).length;
-  if (outros) out.push({ tipo: 'aviso', texto: 'Instituição registrada só como "OUTROS"', n: outros, acao: 'Identificar a instituição' });
+  else { const semL = parts.filter((r) => !r.cod_mun && r.regiao !== 'Exterior'); if (semL.length) out.push({ tipo: 'aviso', id: 'semmun', texto: 'Participantes sem município', n: semL.length, acao: 'Completar a cidade na planilha', quem: semL.map((r) => q(r, r.uf || '')) }); }
+  const outrosL = parts.filter((r) => /^outros?$/i.test(r.instituicao || ''));
+  if (outrosL.length) out.push({ tipo: 'aviso', id: 'outros', texto: 'Instituição registrada só como "OUTROS"', n: outrosL.length, acao: 'Identificar a instituição', quem: outrosL.map((r) => q(r)) });
   return out.sort((a, b) => (a.tipo === b.tipo ? 0 : a.tipo === 'erro' ? -1 : 1));
 }
 export const contarAlertas = (lista) => ({ erros: lista.filter((x) => x.tipo === 'erro').length, avisos: lista.filter((x) => x.tipo !== 'erro').length });
@@ -240,6 +246,25 @@ function blocoMapa(S, rs, mUF, mMun) {
     ${leg}
     <div class="fm-mapa-l"><div class="fm-mapa-w">${svg}</div><div class="fm-mapa-lado">${lado}${aviso}</div></div>
   </section>`;
+}
+
+// lista das pessoas de um problema de qualidade
+function listaQuem(S, p, pode) {
+  const ctt = new Map((S.form.contatos || []).map((c) => [String(c.cod_pessoa), c]));
+  const sig = new Map(processosDe(S).map((x) => [x.cod, x.sigla || x.cod]));
+  const MAX = 40;
+  const linhas = p.quem.slice(0, MAX).map((x) => {
+    const c = ctt.get(x.p);
+    return `<tr><td>${c?.nome ? `<b style="font-weight:600">${e(c.nome)}</b> <span class="xs muted">código ${e(x.p)}</span>` : `código ${e(x.p)}`}${c?.email ? `<div class="xs"><a href="mailto:${e(c.email)}">${e(c.email)}</a></div>` : ''}</td><td>${e(x.proc ? sig.get(x.proc) || x.proc : '')}</td><td class="muted">${e(x.obs || '')}</td></tr>`;
+  }).join('');
+  const total = new Set(p.quem.map((x) => x.p)).size;
+  return `<div class="fm-quem"><table class="fm-tb"><thead><tr><th>Pessoa</th><th>Processo</th><th>Detalhe</th></tr></thead><tbody>${linhas}</tbody></table>
+    ${p.quem.length > MAX ? `<p class="xs muted">Mostrando ${MAX} de ${fmt(p.quem.length)}.</p>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      ${pode ? `<button type="button" class="btn sm" data-acao="fm-quem-busca" data-id="${e(p.id)}">Abrir ${total === 1 ? 'esta pessoa' : `estas ${fmt(total)} pessoas`} na busca</button>` : ''}
+      ${pode && p.id === 'dup' ? '<button type="button" class="btn sm pri" data-acao="fm-juntar">Juntar os registros repetidos</button>' : ''}
+    </div>
+    ${!S.form.contatos?.length ? '<p class="xs muted" style="margin-top:6px">Os nomes aparecem para perfis de edição, depois que a lista de presença (ou uma planilha com nomes) for publicada.</p>' : ''}</div>`;
 }
 
 // ------------------------------------------------------------------ página principal
@@ -412,7 +437,8 @@ export async function pagFormacoes(S) {
   const pend = [...alertas, ...daPlanilha(v).map((p) => ({ ...p, tipo: 'aviso' }))];
   const qual = `<section class="card" aria-labelledby="t-q"><div class="ch"><h2 id="t-q" tabindex="-1">Qualidade dos dados</h2><span class="xs muted">Conferido automaticamente a cada atualização ou correção</span></div>
     <div class="fm-rolar"><table class="fm-tb grande"><thead><tr><th style="width:28px"></th><th>Verificação</th><th class="n">Registros</th><th>O que fazer</th></tr></thead><tbody>
-    ${pend.map((p) => `<tr${p.tipo === 'erro' ? ' class="fm-err"' : ''}><td>${icone(p.tipo === 'erro' ? 'er' : 'wa')}</td><td>${e(p.texto)}</td><td class="n">${fmt(p.n)}</td><td class="muted">${e(p.acao || '')}${p.cod && pode ? ` <button type="button" class="btn sm" data-acao="fm-editar" data-cod="${e(p.cod)}">Corrigir</button>` : ''}</td></tr>`).join('') || `<tr><td>${icone('ok')}</td><td colspan="3">Nenhuma inconsistência encontrada.</td></tr>`}
+    ${pend.map((p) => `<tr${p.tipo === 'erro' ? ' class="fm-err"' : ''}><td>${icone(p.tipo === 'erro' ? 'er' : 'wa')}</td><td>${e(p.texto)}${p.quem?.length ? `<div><button type="button" class="lnk xs" data-acao="fm-quem" data-id="${e(p.id)}" aria-expanded="${S.fmQuem === p.id}">${S.fmQuem === p.id ? 'Esconder' : 'Ver quem'}</button></div>` : ''}</td><td class="n">${fmt(p.n)}</td><td class="muted">${e(p.acao || '')}${p.cod && pode ? ` <button type="button" class="btn sm" data-acao="fm-editar" data-cod="${e(p.cod)}">Corrigir</button>` : ''}</td></tr>
+      ${S.fmQuem === p.id && p.quem?.length ? `<tr class="fm-edrow"><td></td><td colspan="3">${listaQuem(S, p, pode)}</td></tr>` : ''}`).join('') || `<tr><td>${icone('ok')}</td><td colspan="3">Nenhuma inconsistência encontrada.</td></tr>`}
     </tbody></table></div></section>`;
   const versoes = S.form.versoes || [];
   const hist = `<details class="card fm-hist"><summary><b>Histórico de atualizações</b> <span class="xs muted">${versoes.length} ${versoes.length === 1 ? 'versão' : 'versões'}</span></summary>
@@ -425,7 +451,7 @@ export async function pagFormacoes(S) {
   const mapa = blocoMapa(S, rs, mUF, mMun);
   const destaque = alertas.filter((x) => x.tipo === 'erro').slice(0, 3);
   const faixa = nAl.erros ? `<div class="fm-alerta" role="alert">${icone('er')}<div style="flex:1;min-width:0"><b>${nAl.erros === 1 ? 'Uma inconsistência precisa de correção' : `${nAl.erros} inconsistências precisam de correção`}</b>
-      <ul>${destaque.map((x) => `<li>${e(x.texto)}${x.cod && pode ? ` <button type="button" class="lnk" data-acao="fm-editar" data-cod="${e(x.cod)}">Corrigir</button>` : ''}</li>`).join('')}</ul>
+      <ul>${destaque.map((x) => `<li>${e(x.texto)}${x.n > 1 ? ` (${fmt(x.n)})` : ''}${x.cod && pode ? ` <button type="button" class="lnk" data-acao="fm-editar" data-cod="${e(x.cod)}">Corrigir</button>` : ''}${x.quem?.length ? ` <button type="button" class="lnk" data-acao="fm-quem" data-id="${e(x.id)}" data-abrir="1">Ver quem</button>` : ''}</li>`).join('')}</ul>
       <span class="xs">Os números do painel usam os dados como estão.${nAl.avisos ? ` Há também ${nAl.avisos} ${nAl.avisos === 1 ? 'aviso' : 'avisos'}.` : ''}</span></div>
       <button type="button" class="btn sm" data-acao="fm-ir-qualidade">Ver todas</button></div>` : '';
   return `<main class="page fm">${cab}${avisoBanco(S)}${meta}${faixa}${filtros}${kpis}${tabela}${linha}
@@ -463,7 +489,7 @@ function cargaDe(r, p) {
 }
 const tirarAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const GEN = { F: 'Feminino', M: 'Masculino', O: 'Outras identidades' };
-const VAZIOS = { pq: '', pproc: 'todos', puf: '', pmun: '', pgen: '', pset: '', psit: 'todas' };
+const VAZIOS = { pq: '', pproc: 'todos', puf: '', pmun: '', pgen: '', pset: '', psit: 'todas', pcods: '' };
 function pessoas(S, nomesMun) {
   const v = S.form.versao;
   const procs = new Map(processosDe(S).map((p) => [p.cod, p]));
@@ -494,7 +520,8 @@ function filtrarPessoas(S, lista, ignorar = []) {
   for (const k of ignorar) f[k] = VAZIOS[k];
   const termos = tirarAcento(f.pq || '').split(/\s+/).filter(Boolean);
   const daSit = (r) => (f.pproc === 'todos' || String(r.cod_processo) === f.pproc) && (r.situacao || 'sem') === f.psit;
-  return lista.filter((p) => termos.every((t) => p.busca.includes(t))
+  const so = f.pcods && f.pcods.length ? new Set(f.pcods) : null;
+  return lista.filter((p) => (!so || so.has(String(p.cod))) && termos.every((t) => p.busca.includes(t))
     && (f.pproc === 'todos' || p.parts.some((r) => String(r.cod_processo) === f.pproc))
     && (!f.puf || p.uf === f.puf)
     && (!f.pmun || p.cod_mun === f.pmun)
@@ -564,6 +591,7 @@ export async function pagFormacoesPessoas(S) {
   const ativos = [
     f.pq && ['pq', `“${f.pq}”`], f.puf && ['puf', `UF: ${f.puf}`], f.pmun && ['pmun', `Município: ${nomesMun.get(f.pmun) || f.pmun}`],
     f.pgen && ['pgen', `Gênero: ${rotGen(f.pgen)}`], f.pset && ['pset', `Segmento: ${rotSet(f.pset)}`],
+    f.pcods && f.pcods.length && ['pcods', `${f.pcodsRot || 'Pessoas selecionadas'} (${f.pcods.length})`],
     f.pproc !== 'todos' && ['pproc', `Formação: ${siglaP.get(f.pproc) || f.pproc}`], f.psit !== 'todas' && ['psit', `Situação: ${SIT[f.psit]?.[0] || 'sem informação'}`],
   ].filter(Boolean);
   const pilulas = ativos.length ? `<div class="fm-ativos">${ativos.map(([k, t]) => `<button type="button" class="fm-ativo" data-acao="fm-pfiltro" data-chave="${k}" data-valor="${e(VAZIOS[k])}" aria-label="Tirar o filtro ${e(t)}">${e(t)}<span aria-hidden="true">×</span></button>`).join('')}<button type="button" class="lnk xs" data-acao="fm-plimpar">Limpar tudo</button></div>` : '';
@@ -1263,6 +1291,43 @@ export const acoes = {
     return { foco: 'fp-turmas-' + el.dataset.cod };
   },
   async 'fm-fechar'(S) { S.fmEditar = null; return {}; },
+  async 'fm-quem'(S, el) {
+    const id = el.dataset.id;
+    S.fmQuem = S.fmQuem === id && !el.dataset.abrir ? null : id;
+    if (el.dataset.abrir) setTimeout(() => document.getElementById('t-q')?.scrollIntoView({ block: 'start', behavior: 'smooth' }), 40);
+    return {};
+  },
+  async 'fm-quem-busca'(S, el) {
+    const item = verificar(S.form.versao.dados).find((x) => x.id === el.dataset.id);
+    if (!item) return {};
+    Object.assign(S.filtros, VAZIOS, { pcods: [...new Set(item.quem.map((x) => x.p))], pcodsRot: item.texto, plim: 50 });
+    location.hash = '#/formacoes/pessoas';
+    return {};
+  },
+  // une participações repetidas (mesma pessoa, mesmo processo) numa só, guardando o que cada uma tinha
+  async 'fm-juntar'(S) {
+    const v = S.form.versao;
+    const ordem = { concluiu: 3, cursando: 2, nao_concluiu: 1 };
+    const juntas = new Map();
+    let unidas = 0;
+    for (const r of v.dados.participacoes) {
+      const k = `${r.cod_pessoa}|${r.cod_processo}`;
+      const a = juntas.get(k);
+      if (!a) { juntas.set(k, { ...r }); continue; }
+      unidas++;
+      for (const [c, val] of Object.entries(r)) if (a[c] === undefined || a[c] === null || a[c] === '') a[c] = val;
+      if (r.encontros?.length) a.encontros = [...new Set([...(a.encontros || []), ...r.encontros])].sort((x, y) => x - y);
+      if ((ordem[r.situacao] || 0) > (ordem[a.situacao] || 0)) a.situacao = r.situacao;
+      if (typeof r.carga === 'number' && (typeof a.carga !== 'number' || r.carga > a.carga)) a.carga = r.carga;
+    }
+    if (!unidas) return { aviso: 'Não há registros repetidos.' };
+    if (!confirm(`Juntar ${unidas} ${unidas === 1 ? 'registro repetido' : 'registros repetidos'}? Fica uma participação por pessoa em cada processo, com o que cada registro tinha. A versão atual continua no histórico.`)) return {};
+    const dados = derivar({ processos: v.dados.processos, participacoes: [...juntas.values()] });
+    const lista = verificar(dados);
+    await S.api.formacaoPublicar(dados, v.arquivo, `Registros repetidos unidos (${unidas})`, { ...(v.resumo || {}), participacoes: dados.participacoes.length, alertas: contarAlertas(lista) });
+    S.form = null; S.fmQuem = null;
+    return { recarregar: true, aviso: `${unidas} ${unidas === 1 ? 'registro repetido unido' : 'registros repetidos unidos'}.` };
+  },
   async 'fm-peditar'(S, el) { S.fmPessoa = el.dataset.cod; return { foco: 'pc-n' }; },
   async 'fm-pfechar'(S) { S.fmPessoa = null; return {}; },
   async 'fm-pmais'(S) { S.filtros.plim = (S.filtros.plim || 50) + 50; return {}; },
