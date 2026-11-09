@@ -1,12 +1,12 @@
 // Telas da plataforma. Cada página devolve HTML; as ações ficam em
-const VERSAO_SITE = '20261109c';
+const VERSAO_SITE = '20261109e';
 // `acoes` (cliques em [data-acao]) e `formularios` (envios de form[data-form]).
 import {
   e, FASES, FASE, FRENTES, FRENTE, TIPO, PRIORIDADE, PERFIL, SIT_ATRIB, PARCEIRAS, LOGO,
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
   LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub, podeExcluirItem,
-} from './util.js?v=20261109c';
+} from './util.js?v=20261109e';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);

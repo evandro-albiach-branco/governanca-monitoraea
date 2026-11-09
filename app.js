@@ -1,10 +1,10 @@
 // Inicialização, rotas e despacho de ações.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261109c';
-import { criarBackendDemo } from './dados-demo.js?v=20261109c';
-import * as P from './paginas.js?v=20261109c';
-import { pagSintese } from './sintese.js?v=20261109c';
-import * as F from './formacoes.js?v=20261109c';
-import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261109c';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261109e';
+import { criarBackendDemo } from './dados-demo.js?v=20261109e';
+import * as P from './paginas.js?v=20261109e';
+import { pagSintese } from './sintese.js?v=20261109e';
+import * as F from './formacoes.js?v=20261109e';
+import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261109e';
 
 Object.assign(P.acoes, F.acoes);
 Object.assign(P.formularios, F.formularios);
@@ -14,7 +14,7 @@ const S = {
   api: null, eu: null, d: null, notif: [],
   rota: '', params: {}, filtros: { frente: 'todas', origem: 'todas', q: '', triagem: 'recebidas', equipe: 'todas', notif: 'todas', github: 'avaliar', sintese: '30',
     fproc: 'todos', fregiao: 'todas', fsetor: 'todos', fciea: 'todos', fuf: '', fq: '', fmapa: 'uf', fmed: 'part',
-    pq: '', pproc: 'todos', puf: '', psit: 'todas', plim: 50 },
+    pq: '', pproc: 'todos', puf: '', pmun: '', pgen: '', pset: '', psit: 'todas', plim: 50 },
   form: null,        // dados de formação carregados
   fimp: null,        // planilha de formação em conferência
   abaAcesso: 'entrar', ultimoConvite: null,
@@ -59,7 +59,8 @@ function chaveCampo(el) {
 function lerCampos() {
   const v = {};
   raiz.querySelectorAll('textarea, input, select').forEach((el) => {
-    if (el.type === 'file' || el.type === 'password') return;
+    // filtros e seletores de coluna mostram o estado atual; não devem voltar ao valor antigo
+    if (el.type === 'file' || el.type === 'password' || el.matches('select[data-filtro], select[data-fm-col], select[data-fm-aba]')) return;
     const k = chaveCampo(el);
     if (k) v[k] = (el.type === 'checkbox' || el.type === 'radio') ? { c: el.checked } : { v: el.value };
   });
@@ -289,7 +290,7 @@ window.addEventListener('beforeunload', (ev) => {
 async function iniciar() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261109c');
+      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261109e');
       S.api = criarBackendSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
     } else {
       S.api = criarBackendDemo();

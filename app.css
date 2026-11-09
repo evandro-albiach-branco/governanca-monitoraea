@@ -586,3 +586,25 @@ textarea { padding: 10px 12px; resize: vertical; }
 @media (max-width: 640px) { .fm-pres span:last-child { margin-left: 0 !important; } }
 
 .nv-versao { font-size: 10.5px; color: rgba(255,255,255,.38); padding: 2px 12px 8px; letter-spacing: .02em; }
+/* Encontrar pessoas: mapa e filtros */
+.fm-pbusca { display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.fm-pmapa { max-height: 380px; }
+.fm-pmapa-c .fm-lg { margin-top: 10px; }
+.fm-map .fm-uf.apagada { opacity: .45; }
+.fm-pfiltros { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+.fm-pfiltros .fm-f { min-width: 0; flex: none; }
+.fm-pfiltros .fm-pq { grid-column: 1 / -1; }
+.fm-pfiltros select { width: 100%; }
+.fm-ativos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--soft); }
+.fm-ativo { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 12.5px; font-weight: 500; color: #0B3570; background: #EAF2FC; border: 1px solid #C9DCF2; border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.fm-ativo span { font-size: 15px; line-height: 1; color: #5B6678; }
+.fm-ativo:hover { background: #DCEAFA; }
+.fm-tag { font: inherit; font-size: 13px; color: var(--ink); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; border-bottom: 1px dashed #A3ADBA; }
+.fm-tag:hover { color: var(--blue); border-bottom-color: var(--blue); }
+.fm-pseg { max-width: 190px; }
+button.fm-chip { font: inherit; font-size: 12px; cursor: pointer; text-align: left; color: inherit; }
+button.fm-chip:hover { box-shadow: 0 0 0 2px #C9DCF2; }
+@media (max-width: 900px) { .fm-pbusca { grid-template-columns: minmax(0, 1fr); } .fm-pmapa { max-height: 300px; } }
+@media (max-width: 640px) { .fm-pfiltros { grid-template-columns: minmax(0, 1fr); } }
+.fm-chip b { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: bottom; }
+.fm-chips { max-width: 420px; }

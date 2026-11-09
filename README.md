@@ -250,7 +250,7 @@ A partir de agora, o dado padrão é a **lista de presença** do formulário (Mi
 
 - **Nome do evento** vira o processo formativo. Para agrupar encontros de um mesmo processo, termine o nome com `| Encontro 1`, `| Encontro 2`... (também valem Módulo, Aula, Dia, Sessão, Etapa). Sem isso, cada evento é um processo de um encontro só. Mantenha o nome do processo igual em todos os encontros.
 - **A pessoa** é reconhecida pelo CPF, pelo e-mail ou, sem os dois, pelo nome com a cidade. A mesma pessoa em listas diferentes vira uma só. **O CPF não é gravado**: a plataforma guarda só um código embaralhado (hash) dele, para reconhecer a pessoa da próxima vez.
-- **Cidade e estado** viram o município oficial do IBGE. Aceita o estado por extenso ou a sigla, "Cidade-UF" e as regiões administrativas do DF (contam como Brasília). O que não for reconhecido aparece em *Pontos para conferir*.
+- **Cidade e estado** viram o município oficial do IBGE: a plataforma acha o código IBGE pelo nome, sem acento ou em maiúsculas, com pequenos erros de digitação, com a UF por extenso ou escrita junto ("Santos/SP") e com as regiões administrativas do DF (contam como Brasília). O mesmo vale para a planilha antiga com uma coluna de município por nome. O que não for reconhecido aparece em *Pontos para conferir*.
 - **Também entram:** telefone, instituição, autorização de imagem, gênero, cor ou raça, faixa etária, setor e a nota da atividade (1 a 5). Comentários livres não entram.
 
 ### 10.3 Atualizar os dados (a cada evento)
@@ -272,7 +272,7 @@ A plataforma confere os dados a cada publicação e correção. **Erros** (verme
 
 ### 10.5 Encontrar pessoas e privacidade (LGPD)
 
-Em *Formações › Encontrar pessoas*: busca por nome, e-mail, telefone, instituição ou município, com filtros de processo, UF e situação. Mostra os processos e encontros de cada pessoa, se concluiu, a carga cursada, UF, município, contatos e se autoriza uso de imagem. Dá para copiar os e-mails (para colar em Cco), baixar a lista em CSV e corrigir um contato.
+Em *Formações › Encontrar pessoas*: um mapa das UF (clique numa UF para filtrar) e filtros por nome ou contato, UF, município, gênero, segmento, formação e situação. A tabela mostra sempre nome, contatos, UF, município, gênero, segmento e as formações de cada pessoa; clicar em qualquer um desses valores vira filtro, e os filtros ativos aparecem como etiquetas com × para tirar. Dá para copiar os e-mails (para colar em Cco), baixar a lista filtrada em CSV e corrigir um contato.
 
 - Nomes, e-mails, telefones e autorização de imagem ficam na tabela `formacao_contatos`, que só perfis de colaboração, coordenação e administração enxergam. Perfis de leitura veem só os números agregados.
 - Gênero, cor ou raça e faixa etária aparecem só agregados no painel, sem nome.
