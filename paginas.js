@@ -5,7 +5,7 @@ import {
   hojeISO, somarDias, dataCurta, dataLonga, quando, diasAte, diasUteisDesde, aberto, situacaoPrazo,
   siglaDe, avatar, podeEditar, ehAdmin, coordenaDe, podeEditarItem, outraParceira,
   LIMITE_MB, tamanhoFmt, duracaoFmt, extensao, youtubeId, linkSeguro, podeGithub, podeExcluirItem,
-} from './util.js?v=20261108b';
+} from './util.js?v=20261109a';
 
 // ------------------------------------------------------------------ apoio
 const membro = (S, id) => S.d.membros.find((m) => m.id === id);
@@ -106,7 +106,7 @@ export function moldura(S, rota, conteudo) {
     <a class="brand" href="#/sintese"><img src="${LOGO.MONITORAEA}" alt="MonitoraEA, página inicial"><span>Governança compartilhada</span></a>
     ${podeEditar(S.eu) ? `<a class="newbtn${rota === 'novo' ? ' on' : ''}" href="#/novo">${svg('mais', 16)}Novo registro</a>` : ''}
     <nav aria-label="Navegação principal">
-      ${nv('sintese', 'Síntese')}${nv('painel', 'Painel')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${S.d.formacoesAtivo ? nv('formacoes', 'Formações', S.d.formacoesAlertas?.erros || 0, true) : ''}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${nv('equipe', 'Equipe')}
+      ${nv('sintese', 'Síntese')}${nv('painel', 'Painel')}${nv('quadro', 'Quadro', S.d.itens.filter(aberto).length)}${nv('formacoes', 'Formações', S.d.formacoesAlertas?.erros || 0, true)}${nv('triagem', 'Triagem', nTriagem, true)}${nv('decisoes', 'Decisões', nPauta)}${nv('equipe', 'Equipe')}
     </nav>
     ${ghLink ? `<div class="ext-gh"><span class="ext-t">Desenvolvimento</span>${ghLink}</div>` : ''}
     <div class="foot">

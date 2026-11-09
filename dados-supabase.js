@@ -103,10 +103,21 @@ export function criarBackendSupabase(url, chave) {
       }
       const meta = {};
       ok(pr).forEach((p) => { meta[p.cod] = { realizacao: p.realizacao, item_id: p.item_id }; });
-      return { versao: ok(ult)[0] || null, versoes: ok(vs), meta };
+      // nomes e contatos: o banco só entrega a perfis de edição; vem em páginas de 1000
+      const contatos = [];
+      for (let de = 0; de < 200000; de += 1000) {
+        const r = await sb.from('formacao_contatos').select('cod_pessoa, nome, email, telefone').order('cod_pessoa').range(de, de + 999);
+        if (r.error) break;   // tabela ainda não criada: segue sem nomes
+        contatos.push(...r.data);
+        if (r.data.length < 1000) break;
+      }
+      return { versao: ok(ult)[0] || null, versoes: ok(vs), meta, contatos };
     },
-    async formacaoPublicar(dados, arquivo, nota, resumo) {
-      return ok(await sb.rpc('formacao_publicar', { p_dados: dados, p_arquivo: arquivo || null, p_nota: nota || null, p_resumo: resumo || {} }));
+    async formacaoPublicar(dados, arquivo, nota, resumo, contatos) {
+      return ok(await sb.rpc('formacao_publicar', { p_dados: dados, p_arquivo: arquivo || null, p_nota: nota || null, p_resumo: resumo || {}, p_contatos: contatos && contatos.length ? contatos : null }));
+    },
+    async formacaoContato(cod, nome, email, telefone) {
+      ok(await sb.rpc('formacao_contato_salvar', { p_cod: cod, p_nome: nome || null, p_email: email || null, p_telefone: telefone || null }));
     },
     async formacaoCorrigir(cod, campos, nota, resumo) {
       return ok(await sb.rpc('formacao_processo_corrigir', { p_cod: cod, p_campos: campos, p_nota: nota || null, p_resumo: resumo || null }));

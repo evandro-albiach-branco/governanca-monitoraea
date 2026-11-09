@@ -1,8 +1,8 @@
 // Modo demonstração: mesmos fluxos e regras do banco real, com dados de
 // exemplo guardados apenas neste navegador (localStorage).
-import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub, podeExcluirItem } from './util.js?v=20261108b';
-import { versaoDemo } from './demo-formacoes.js?v=20261108b';
-import { verificar, contarAlertas } from './formacoes.js?v=20261108b';
+import { hojeISO, somarDias, FASE, PARCEIRAS, siglaDe, podeGithub, podeExcluirItem } from './util.js?v=20261109a';
+import { versaoDemo, contatosDemo, participacoesDemo } from './demo-formacoes.js?v=20261109a';
+import { verificar, contarAlertas } from './formacoes.js?v=20261109a';
 
 const CHAVE = 'gov-monitoraea-demo-v5';
 const REPO_DEMO = 'ladis-inpe/monitoraea';
@@ -153,6 +153,7 @@ export function criarBackendDemo() {
     db.formacao_versoes = [versaoDemo(agoraMenos)];
     db.formacao_processos = { 20004: { realizacao: 'CONJUNTA', item_id: 5 }, 20005: { realizacao: 'INPE', item_id: null } };
   }
+  if (!db.formacao_contatos) db.formacao_contatos = Object.fromEntries(contatosDemo(participacoesDemo()).map((c) => [c.cod_pessoa, c]));
   // Arquivos do modo demonstração ficam só na memória desta aba.
   const blobs = new Map();
   const salvar = () => { try { localStorage.setItem(CHAVE, JSON.stringify(db)); } catch { /* navegador sem armazenamento */ } };
@@ -286,7 +287,7 @@ export function criarBackendDemo() {
       try { localStorage.setItem(CHAVE_EU, id); } catch { /* */ }
       return copia(eu());
     },
-    reiniciarDemo() { db = semente(); db.formacao_versoes = [versaoDemo(agoraMenos)]; db.formacao_processos = { 20004: { realizacao: 'CONJUNTA', item_id: 5 }, 20005: { realizacao: 'INPE', item_id: null } }; salvar(); },
+    reiniciarDemo() { db = semente(); db.formacao_contatos = Object.fromEntries(contatosDemo(participacoesDemo()).map((c) => [c.cod_pessoa, c])); db.formacao_versoes = [versaoDemo(agoraMenos)]; db.formacao_processos = { 20004: { realizacao: 'CONJUNTA', item_id: 5 }, 20005: { realizacao: 'INPE', item_id: null } }; salvar(); },
 
     async carregar() {
       return copia({
@@ -534,17 +535,24 @@ export function criarBackendDemo() {
         versao: vs[0] || null,
         versoes: vs.map(({ dados, ...r }) => r),
         meta: db.formacao_processos,
+        // nomes e contatos: só perfis de edição recebem
+        contatos: podeFormacao() ? Object.values(db.formacao_contatos) : [],
       });
     },
-    async formacaoPublicar(dados, arquivo, nota, resumo) {
+    async formacaoPublicar(dados, arquivo, nota, resumo, contatos) {
       if (!podeFormacao()) falha('Seu perfil é só de leitura e não atualiza as formações.');
       const limpo = {
         processos: (dados.processos || []).map((p) => soCampos(p, ['cod', 'sigla', 'nome', 'inicio', 'fim', 'turmas', 'carga_turma', 'carga_total', 'modalidade'])),
-        participacoes: (dados.participacoes || []).map((r) => soCampos(r, ['cod_pessoa', 'cod_processo', 'papel', 'uf', 'cod_mun', 'regiao', 'genero', 'setor', 'instituicao', 'ciea'])),
+        participacoes: (dados.participacoes || []).map((r) => soCampos(r, ['cod_pessoa', 'cod_processo', 'papel', 'uf', 'cod_mun', 'regiao', 'genero', 'setor', 'instituicao', 'ciea', 'situacao', 'turma', 'carga'])),
       };
       if (!limpo.participacoes.length) falha('Nenhuma participação reconhecida na planilha.');
       const v = { id: novoId(), criado_em: agora(), criado_por: euId, arquivo, nota: nota || null, dados: limpo, resumo: resumo || {} };
       db.formacao_versoes.push(v);
+      for (const c of contatos || []) {
+        if (!c.cod_pessoa) continue;
+        const a = db.formacao_contatos[c.cod_pessoa] || { cod_pessoa: c.cod_pessoa };
+        db.formacao_contatos[c.cod_pessoa] = { ...a, ...soCampos({ nome: c.nome, email: c.email ? String(c.email).toLowerCase() : null, telefone: c.telefone }, ['nome', 'email', 'telefone']) };
+      }
       // a demonstração guarda só as 6 versões mais recentes, para caber no navegador
       db.formacao_versoes = db.formacao_versoes.sort((a, b) => b.criado_em.localeCompare(a.criado_em) || b.id - a.id).slice(0, 6);
       const porProc = limpo.participacoes.reduce((m, r) => { m[r.cod_processo] = (m[r.cod_processo] || 0) + 1; return m; }, {});
@@ -567,6 +575,12 @@ export function criarBackendDemo() {
       db.formacao_versoes = db.formacao_versoes.sort((a, b) => b.criado_em.localeCompare(a.criado_em) || b.id - a.id).slice(0, 6);
       const item = db.formacao_processos[cod]?.item_id;
       if (item) evento(item, 'formacao', `Dados do processo formativo ${cod} corrigidos${nota ? `: ${nota}` : ''}`);
+      salvar();
+    },
+    async formacaoContato(cod, nome, email, telefone) {
+      if (!podeFormacao()) falha('Seu perfil é só de leitura e não atualiza as formações.');
+      if (!nome && !email && !telefone) delete db.formacao_contatos[cod];
+      else db.formacao_contatos[cod] = { cod_pessoa: cod, nome: nome || null, email: email ? email.toLowerCase() : null, telefone: telefone || null };
       salvar();
     },
     async formacaoRestaurar(id) {

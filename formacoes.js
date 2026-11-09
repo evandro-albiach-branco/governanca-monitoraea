@@ -1,9 +1,9 @@
 // Formações: painel dos processos formativos e atualização por planilha.
 // Os mapas usam a malha oficial do IBGE (Malha Municipal Digital 2025), já simplificada
 // e convertida em caminhos SVG nos arquivos malha-uf.json e malha-municipios.json.
-import { e, dataLonga, dataCurta, quando, siglaDe, podeEditar } from './util.js?v=20261108b';
+import { e, dataLonga, dataCurta, quando, siglaDe, podeEditar } from './util.js?v=20261109a';
 
-const V = '20261108b';
+const V = '20261109a';
 const XLSX_URL = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
 
 // ------------------------------------------------------------------ constantes
@@ -218,7 +218,7 @@ export async function pagFormacoes(S) {
   const v = S.form.versao;
   const pode = podeFormacao(S.eu);
   const cab = `<div class="ph"><div class="txt"><h1>Formações</h1><p class="sub">Processos formativos do MonitoraEA e parceiros: quem participou, onde e com que carga horária</p></div>
-    <div class="acoes-ph">${v ? '<button type="button" class="btn" data-acao="imprimir">Imprimir ou salvar PDF</button>' : ''}${pode ? '<a class="btn pri" href="#/formacoes/atualizar">Atualizar dados</a>' : ''}</div></div>`;
+    <div class="acoes-ph">${v && pode ? '<a class="btn" href="#/formacoes/pessoas">Encontrar pessoas</a>' : ''}${v ? '<button type="button" class="btn" data-acao="imprimir">Imprimir ou salvar PDF</button>' : ''}${pode ? '<a class="btn pri" href="#/formacoes/atualizar">Atualizar dados</a>' : ''}</div></div>`;
   if (!v) {
     return `<main class="page">${cab}<section class="card fm-bx" style="text-align:center;padding:48px 24px"><h2>Nenhum dado de formação publicado ainda</h2>
       <p class="sub" style="margin:8px auto 18px">Os dados vêm da planilha de processos formativos (abas de participações e de processos). ${pode ? 'Envie a planilha para montar o painel.' : 'Quem atualiza é qualquer pessoa da plataforma com perfil de edição.'}</p>
@@ -352,6 +352,7 @@ export async function pagFormacoes(S) {
   const perfil = `<section class="card fm-bx" aria-labelledby="t-perf"><h2 id="t-perf">Perfil de quem participa</h2><p class="s">Participações no filtro</p><div class="fm-perf">
     ${pb('Gênero', [['#0B3570', mulheres, 'Mulheres'], ['#9DC6EC', comGenero - mulheres, 'Homens', true], ['#D6DCE4', rs.length - comGenero, 'Não informado', true]])}
     ${pb('Representam uma CIEA', [['#0B3570', ciea, 'Sim'], ['#D6DCE4', rs.length - ciea, 'Não', true]])}
+    ${rs.some((r) => r.situacao) ? pb('Situação', [['#1E7A43', rs.filter((r) => r.situacao === 'concluiu').length, 'Concluíram'], ['#9DC6EC', rs.filter((r) => r.situacao === 'cursando').length, 'Cursando', true], ['#B42323', rs.filter((r) => r.situacao === 'nao_concluiu').length, 'Não concluíram'], ['#D6DCE4', rs.filter((r) => !r.situacao).length, 'Sem informação', true]]) : ''}
     ${formadores ? pb('Formandos e formadores', [['#0B3570', pessoas.size - formadores, 'Formandos'], ['#D8920C', formadores, 'Formadores']]) : ''}
     ${multi ? `<p class="xs muted">${fmt(multi)} pessoas participaram de mais de um processo.</p>` : ''}</div></section>`;
 
@@ -394,7 +395,7 @@ export async function pagFormacoes(S) {
     <div class="fm-g2">${setor}${perfil}</div>
     ${mapa}${lado}
     ${qual}${hist}
-    <p class="xs muted">Malha territorial: IBGE, Malha Municipal Digital 2025, simplificada para exibição na web. Participações contam cada pessoa uma vez por processo. O banco guarda só códigos e atributos agregáveis: nomes, e-mails e telefones da planilha não são gravados.</p>
+    <p class="xs muted">Malha territorial: IBGE, Malha Municipal Digital 2025, simplificada para exibição na web. Participações contam cada pessoa uma vez por processo. Nomes, e-mails e telefones ficam numa área à parte, que só perfis de edição enxergam.</p>
   </main>`;
 }
 
@@ -413,6 +414,128 @@ function icone(k) {
   return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A5F00" stroke-width="2.4" stroke-linecap="round" aria-label="atenção"><path d="M12 3 2.5 20h19z"></path><path d="M12 10v4.5"></path><path d="M12 17.5v.2"></path></svg>';
 }
 
+// ------------------------------------------------------------------ encontrar pessoas
+const SIT = { concluiu: ['Concluiu', 'ok'], nao_concluiu: ['Não concluiu', 'nao'], cursando: ['Cursando', 'cur'] };
+// carga de uma participação: a informada na planilha ou, se concluiu, a carga de uma turma do processo
+function cargaDe(r, p) {
+  if (typeof r.carga === 'number') return { h: r.carga, estimada: false };
+  if (r.situacao !== 'concluiu' || !p) return { h: null, estimada: false };
+  const h = p.carga_turma || (p.carga_total && p.turmas ? p.carga_total / p.turmas : p.carga_total) || null;
+  return { h, estimada: h !== null };
+}
+const tirarAcento = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+function pessoas(S, nomesMun) {
+  const v = S.form.versao;
+  const procs = new Map(processosDe(S).map((p) => [p.cod, p]));
+  const ctt = new Map((S.form.contatos || []).map((c) => [String(c.cod_pessoa), c]));
+  const grupo = new Map();
+  for (const r of v.dados.participacoes) {
+    const g = grupo.get(r.cod_pessoa) || { cod: r.cod_pessoa, parts: [] };
+    g.parts.push(r);
+    grupo.set(r.cod_pessoa, g);
+  }
+  return [...grupo.values()].map((g) => {
+    g.parts.sort((a, b) => (procs.get(String(a.cod_processo))?.inicio || '').localeCompare(procs.get(String(b.cod_processo))?.inicio || ''));
+    const ult = g.parts[g.parts.length - 1];
+    const c = ctt.get(String(g.cod)) || {};
+    let horas = 0, estimada = false;
+    for (const r of g.parts) { const k = cargaDe(r, procs.get(String(r.cod_processo))); if (r.situacao === 'concluiu' && k.h) { horas += k.h; estimada = estimada || k.estimada; } }
+    const mun = [...g.parts].reverse().find((r) => r.cod_mun)?.cod_mun || null;
+    return { ...g, nome: c.nome || '', email: c.email || '', telefone: c.telefone || '', uf: [...g.parts].reverse().find((r) => r.uf)?.uf || '',
+      cod_mun: mun, municipio: mun ? (nomesMun.get(mun) || mun) : '', instituicao: ult.instituicao || '', horas, estimada,
+      busca: tirarAcento([c.nome, c.email, c.telefone, g.cod, ult.instituicao, mun ? nomesMun.get(mun) : ''].join(' ')) };
+  });
+}
+function filtrarPessoas(S, lista) {
+  const f = S.filtros;
+  const termos = tirarAcento(f.pq || '').split(/\s+/).filter(Boolean);
+  return lista.filter((p) => termos.every((t) => p.busca.includes(t))
+    && (f.pproc === 'todos' || p.parts.some((r) => String(r.cod_processo) === f.pproc))
+    && (!f.puf || p.uf === f.puf)
+    && (f.psit === 'todas' || p.parts.some((r) => (f.pproc === 'todos' || String(r.cod_processo) === f.pproc) && (r.situacao || 'sem') === f.psit)))
+    .sort((a, b) => (a.nome || '~').localeCompare(b.nome || '~', 'pt-BR') || a.cod.localeCompare(b.cod));
+}
+let nomesMunCache = null;
+async function nomesMunicipios() {
+  if (!nomesMunCache) { const m = await malha('mun'); nomesMunCache = new Map(m.mun.map((x) => [x[0], x[1]])); }
+  return nomesMunCache;
+}
+
+export async function pagFormacoesPessoas(S) {
+  await garantirFormacoes(S);
+  const v = S.form.versao;
+  const voltar = '<div class="xs muted" style="margin-bottom:4px"><a href="#/formacoes">Formações</a> / Encontrar pessoas</div>';
+  const cab = `<div class="ph"><div class="txt">${voltar}<h1>Encontrar pessoas</h1><p class="sub">Quem passou pelas formações, em quais processos, se concluiu, com que carga horária, onde está e como contatar</p></div>`;
+  if (!podeFormacao(S.eu)) {
+    return `<main class="page fm">${cab}</div><section class="card fm-bx"><h2>Área restrita</h2><p class="sub">Nomes e contatos dos participantes ficam visíveis só para perfis de colaboração, coordenação e administração. Seu perfil é de leitura e vê os números agregados na página Formações.</p></section></main>`;
+  }
+  if (!v) return `<main class="page fm">${cab}</div><section class="card fm-bx"><p class="sub">Ainda não há dados de formação publicados.</p></section></main>`;
+  const nomesMun = await nomesMunicipios();
+  const todas = pessoas(S, nomesMun);
+  const achadas = filtrarPessoas(S, todas);
+  const f = S.filtros;
+  const lim = f.plim || 50;
+  const procs = processosDe(S);
+  const siglaP = new Map(procs.map((p) => [p.cod, p.sigla || p.cod]));
+  const procMap = new Map(procs.map((p) => [p.cod, p]));
+  const opt = (lista, atual) => lista.map(([k, t]) => `<option value="${e(k)}"${k === atual ? ' selected' : ''}>${e(t)}</option>`).join('');
+  const ufs = [...new Set(todas.map((p) => p.uf).filter(Boolean))].sort();
+  const semNomes = !todas.some((p) => p.nome);
+  const comEmail = achadas.filter((p) => p.email);
+  const busca = `<form class="fm-filtros" data-form="fm-pbusca">
+    <div class="fm-f" style="flex:2 1 320px"><label for="pq">Nome, e-mail, telefone, código, instituição ou município</label><div style="display:flex;gap:6px"><input id="pq" name="q" type="search" value="${e(f.pq || '')}" placeholder="Ex.: Mariana Souza, Ibama, Cuiabá" autocomplete="off"><button class="btn sm pri" type="submit">Buscar</button></div></div>
+    <div class="fm-f"><label for="pp">Processo</label><select id="pp" data-filtro="pproc">${opt([['todos', 'Todos'], ...procs.map((p) => [p.cod, p.sigla || p.cod])], f.pproc)}</select></div>
+    <div class="fm-f" style="flex:0 1 110px;min-width:96px"><label for="pu">UF</label><select id="pu" data-filtro="puf">${opt([['', 'Todas'], ...ufs.map((u) => [u, u])], f.puf)}</select></div>
+    <div class="fm-f"><label for="ps">Situação</label><select id="ps" data-filtro="psit">${opt([['todas', 'Todas'], ['concluiu', 'Concluiu'], ['nao_concluiu', 'Não concluiu'], ['cursando', 'Cursando'], ['sem', 'Sem informação']], f.psit)}</select></div>
+    ${(f.pq || f.pproc !== 'todos' || f.puf || f.psit !== 'todas') ? '<button type="button" class="lnk" data-acao="fm-plimpar" style="align-self:center">Limpar</button>' : ''}
+  </form>`;
+  const chip = (r) => {
+    const s = SIT[r.situacao];
+    const k = cargaDe(r, procMap.get(String(r.cod_processo)));
+    const det = [r.turma ? `turma ${r.turma}` : '', k.h !== null ? `${fmt(k.h)} h${k.estimada ? '*' : ''}` : ''].filter(Boolean).join(' · ');
+    return `<span class="fm-chip ${s ? s[1] : 'sem'}" title="${e(`${siglaP.get(String(r.cod_processo)) || r.cod_processo}: ${s ? s[0] : 'situação não informada'}${det ? ' · ' + det : ''}`)}"><b>${e(siglaP.get(String(r.cod_processo)) || r.cod_processo)}</b>${s ? `<i>${s[0]}</i>` : ''}${det ? `<em>${e(det)}</em>` : ''}</span>`;
+  };
+  const linha = (p) => {
+    const aberto = S.fmPessoa === p.cod;
+    return `<tr${aberto ? ' class="sel"' : ''}>
+      <td><b class="fm-pnome">${p.nome ? e(p.nome) : '<span class="muted">Sem nome</span>'}</b><div class="xs muted">código ${e(p.cod)}${p.instituicao ? ` · ${e(p.instituicao)}` : ''}</div></td>
+      <td><div class="fm-chips">${p.parts.map(chip).join('')}</div></td>
+      <td class="n">${p.horas ? `${fmt(p.horas)} h${p.estimada ? '*' : ''}` : '<span class="muted">—</span>'}</td>
+      <td>${e(p.uf || '—')}</td><td>${e(p.municipio || '—')}</td>
+      <td class="fm-ctt">${p.email ? `<a href="mailto:${e(p.email)}">${e(p.email)}</a>` : '<span class="xs muted">sem e-mail</span>'}${p.telefone ? `<div><a href="tel:${e(p.telefone.replace(/[^\d+]/g, ''))}">${e(p.telefone)}</a></div>` : ''}
+        <div><button type="button" class="lnk xs" data-acao="${aberto ? 'fm-pfechar' : 'fm-peditar'}" data-cod="${e(p.cod)}">${aberto ? 'Fechar' : 'Corrigir contato'}</button></div></td></tr>
+      ${aberto ? `<tr class="fm-edrow"><td colspan="6"><form class="form fm-edf" data-form="fm-contato" data-cod="${e(p.cod)}"><h3>Contato de ${e(p.nome || 'código ' + p.cod)}</h3>
+        <div class="fm-edg"><div class="f largo"><label for="pc-n">Nome</label><input id="pc-n" name="nome" type="text" maxlength="200" value="${e(p.nome)}"></div>
+        <div class="f"><label for="pc-e">E-mail</label><input id="pc-e" name="email" type="email" maxlength="200" value="${e(p.email)}"></div>
+        <div class="f"><label for="pc-t">Telefone</label><input id="pc-t" name="telefone" type="text" maxlength="60" value="${e(p.telefone)}"></div></div>
+        <p class="xs muted">Deixar tudo vazio apaga o nome e os contatos desta pessoa (por exemplo, quando ela pedir para sair do cadastro). A participação continua contando nos números.</p>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="btn sm" data-acao="fm-pfechar">Cancelar</button><button class="btn sm pri" type="submit">Salvar contato</button></div></form></td></tr>` : ''}`;
+  };
+  const conc = achadas.filter((p) => p.parts.some((r) => r.situacao === 'concluiu')).length;
+  const resumo = `<div class="fm-pres"><span><b>${fmt(achadas.length)}</b> ${achadas.length === 1 ? 'pessoa' : 'pessoas'}${achadas.length !== todas.length ? ` de ${fmt(todas.length)}` : ''}</span><span><b>${fmt(conc)}</b> concluíram ao menos um processo</span><span><b>${fmt(comEmail.length)}</b> com e-mail</span>
+    <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn sm" data-acao="fm-pcopiar"${comEmail.length ? '' : ' disabled'}>Copiar e-mails</button><button type="button" class="btn sm" data-acao="fm-pcsv"${achadas.length ? '' : ' disabled'}>Baixar lista (CSV)</button></span></div>`;
+  const tabela = achadas.length ? `<div class="fm-rolar"><table class="fm-tb grande fm-ptb"><thead><tr><th>Pessoa</th><th>Formações</th><th class="n">Carga cursada</th><th>UF</th><th>Município</th><th>Contatos</th></tr></thead><tbody>${achadas.slice(0, lim).map(linha).join('')}</tbody></table></div>
+    ${achadas.length > lim ? `<div style="text-align:center;padding:14px"><button type="button" class="btn" data-acao="fm-pmais">Mostrar mais ${fmt(Math.min(50, achadas.length - lim))} (de ${fmt(achadas.length - lim)} restantes)</button></div>` : ''}`
+    : '<p class="vazio" style="padding:24px">Ninguém encontrado com esses filtros.</p>';
+  return `<main class="page fm">${cab}<div class="acoes-ph"></div></div>
+    ${semNomes ? '<div class="fm-aviso" style="margin:0">A planilha publicada não trouxe nomes nem contatos, então a busca funciona só por código, instituição e município. Envie a planilha de novo em <a href="#/formacoes/atualizar">Atualizar dados</a>, com as colunas de nome, e-mail e telefone.</div>' : ''}
+    ${busca}
+    <section class="card" style="overflow:hidden">${resumo}${tabela}</section>
+    <p class="xs muted">Carga cursada: soma dos processos concluídos. Com * é estimada (a planilha não trouxe a carga da pessoa, então vale a carga de uma turma do processo). Dados pessoais protegidos pela LGPD: use só para as finalidades do programa e não repasse a terceiros.</p>
+  </main>`;
+}
+export function listaCSV(S) {
+  const lista = filtrarPessoas(S, pessoas(S, nomesMunCache || new Map()));
+  const procs = new Map(processosDe(S).map((p) => [p.cod, p]));
+  const q = (t) => `"${String(t ?? '').replace(/"/g, '""')}"`;
+  const linhas = [['codigo', 'nome', 'email', 'telefone', 'uf', 'municipio', 'cod_mun', 'instituicao', 'formacoes', 'concluidas', 'carga_cursada_h'].join(';')];
+  for (const p of lista) {
+    const fz = p.parts.map((r) => { const pr = procs.get(String(r.cod_processo)); return `${pr?.sigla || r.cod_processo}${r.turma ? ` (turma ${r.turma})` : ''}: ${SIT[r.situacao]?.[0] || 'sem informação'}`; }).join(' | ');
+    linhas.push([p.cod, p.nome, p.email, p.telefone, p.uf, p.municipio, p.cod_mun || '', p.instituicao, fz, p.parts.filter((r) => r.situacao === 'concluiu').length, p.horas || ''].map(q).join(';'));
+  }
+  return { csv: '﻿' + linhas.join('\n'), emails: [...new Set(lista.map((p) => p.email).filter(Boolean))] };
+}
+
 // ------------------------------------------------------------------ importação da planilha
 const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 const CAMPOS_PART = [
@@ -425,7 +548,12 @@ const CAMPOS_PART = [
   ['setor', 'Setor', ['setor', 'setor_instituicao', 'segmento']],
   ['instituicao', 'Instituição', ['instituicao', 'orgao', 'organizacao', 'entidade']],
   ['ciea', 'Representa CIEA', ['representando_ciea', 'representa_ciea', 'ciea']],
-  ['email', 'E-mail (só para conferir, não é gravado)', ['email', 'e_mail', 'correio_eletronico']],
+  ['nome', 'Nome da pessoa', ['nome', 'nome_completo', 'nome_do_participante', 'participante', 'nome_participante', 'nome_social']],
+  ['email', 'E-mail', ['email', 'e_mail', 'correio_eletronico', 'endereco_de_email']],
+  ['telefone', 'Telefone', ['telefone', 'celular', 'whatsapp', 'fone', 'tel', 'contato']],
+  ['situacao', 'Concluiu? (situação)', ['situacao', 'concluiu', 'concluido', 'conclusao', 'concluinte', 'certificado', 'certificada', 'status', 'aprovado', 'aprovacao']],
+  ['turma', 'Turma', ['turma', 'n_turma', 'numero_da_turma', 'numero_turma', 'turma_n']],
+  ['carga', 'Carga horária cursada', ['carga_cursada', 'horas_cursadas', 'ch_cursada', 'carga_horaria_cursada', 'carga_horaria_participante', 'carga_horaria_certificada', 'horas_certificadas']],
 ];
 const CAMPOS_PROC = [
   ['cod', 'Código', ['cod_formacao', 'codigo_formacao', 'cod_processo', 'codigo', 'cod'], true],
@@ -485,6 +613,14 @@ export async function receberPlanilha(S, arquivo) {
 const texto = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '').trim());
 function codigo(v) { const t = texto(v); return /^\d+(\.0+)?$/.test(t) ? String(Number(t)) : t; }
 function simNao(v) { const t = norm(v); if (['sim', 's', 'true', 'verdadeiro', '1', 'x', 'yes'].includes(t)) return true; if (['nao', 'n', 'false', 'falso', '0', 'no'].includes(t)) return false; return null; }
+function situacao(v) {
+  const t = norm(v);
+  if (!t) return null;
+  if (/^(sim|s|true|1|x|concluiu|concluido|concluida|concluinte|aprovado|aprovada|certificado|certificada|finalizado|finalizou)$/.test(t)) return 'concluiu';
+  if (/^(cursando|em_andamento|em_curso|matriculado|matriculada|andamento)$/.test(t)) return 'cursando';
+  if (/^(nao|n|false|0|desistente|desistiu|evadido|evadida|evasao|reprovado|reprovada|abandonou|abandono|nao_concluiu|nao_concluido|nao_concluinte|cancelado|cancelada|trancado|inapto)$/.test(t) || t.startsWith('nao_')) return 'nao_concluiu';
+  return null;
+}
 function genero(v) { const t = norm(v); if (['f', 'feminino', 'mulher', 'fem'].includes(t)) return 'F'; if (['m', 'masculino', 'homem', 'masc'].includes(t)) return 'M'; return null; }
 function numero(v) { if (typeof v === 'number') return v; const t = texto(v).replace(/h$/i, '').replace(/\./g, '').replace(',', '.').trim(); const n = Number(t); return t && Number.isFinite(n) ? n : null; }
 const NOME_MES = { jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6, jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12 };
@@ -508,6 +644,7 @@ function montar(S) {
   const mp = fi.mPart;
   const pegar = (l, k) => (mp[k] ? l[mp[k]] : '');
   const participacoes = [];
+  const contatos = new Map();
   let ignoradas = 0, semEmail = 0, munInvalido = 0, mun6 = 0;
   for (const l of part.linhas) {
     const cod_pessoa = codigo(pegar(l, 'cod_pessoa'));
@@ -529,7 +666,21 @@ function montar(S) {
     const ins = texto(pegar(l, 'instituicao')); if (ins) r.instituicao = ins;
     const c = simNao(pegar(l, 'ciea')); if (c !== null) r.ciea = c;
     const n = Number(cod_pessoa); if (Number.isFinite(n)) r.papel = n >= 10000 && n < 20000 ? 'formador' : n >= 30000 && n < 40000 ? 'formando' : undefined;
+    const sit = situacao(pegar(l, 'situacao')); if (sit) r.situacao = sit;
+    const tu = texto(pegar(l, 'turma')); if (tu) r.turma = tu.replace(/^turma\s*/i, '').slice(0, 20);
+    const ch = numero(pegar(l, 'carga')); if (ch !== null && ch >= 0) r.carga = ch;
     if (mp.email && !texto(pegar(l, 'email'))) semEmail++;
+    // nome e contatos vão para a área restrita, separados dos dados do painel
+    const nm = texto(pegar(l, 'nome')).replace(/\s+/g, ' ');
+    const em = texto(pegar(l, 'email')).toLowerCase();
+    const tel = texto(pegar(l, 'telefone'));
+    if (nm || em || tel) {
+      const c = contatos.get(cod_pessoa) || { cod_pessoa };
+      if (nm && !c.nome) c.nome = titulo(nm).replace(/\b(D[aeo]s?|E)\b/g, (x) => x.toLowerCase());
+      if (em && !c.email && /@/.test(em)) c.email = em;
+      if (tel && !c.telefone) c.telefone = tel;
+      contatos.set(cod_pessoa, c);
+    }
     for (const k of Object.keys(r)) if (r[k] === undefined) delete r[k];
     participacoes.push(r);
   }
@@ -583,7 +734,7 @@ function montar(S) {
     alertas: contarAlertas(pend.filter((p) => p.fonte !== 'planilha')),
   };
   resumo.lista = pend;
-  return { dados: { processos, participacoes }, resumo, dif: { novas, alteradas, mesmas, removidas, pessoasNovas, ufsNovas, procNovos, mun6, primeira: !ant.length } };
+  return { dados: { processos, participacoes }, contatos: [...contatos.values()], resumo, dif: { novas, alteradas, mesmas, removidas, pessoasNovas, ufsNovas, procNovos, mun6, primeira: !ant.length } };
 }
 
 export async function pagFormacoesAtualizar(S) {
@@ -603,7 +754,7 @@ export async function pagFormacoesAtualizar(S) {
   if (!fi) {
     return `<main class="page fm" style="max-width:1080px">${cab}<section class="card fm-bx">${envio}</section>
       <section class="card fm-bx"><h2>O que a planilha precisa ter</h2><p class="s">Os nomes das colunas não precisam ser exatos: a plataforma reconhece variações e, se errar, você escolhe a coluna certa na próxima etapa.</p>
-      <ul class="fm-ul"><li><b>Obrigatórias:</b> código da pessoa e código do processo.</li><li><b>Recomendadas:</b> UF, código IBGE do município (7 dígitos), região, gênero, setor, instituição e se representa uma CIEA.</li><li><b>Aba de processos (opcional):</b> código, sigla, descrição, início, fim, turmas, carga horária por turma e total, modalidade.</li><li>Nomes, e-mails e telefones podem continuar na planilha: <b>eles não são gravados</b> na plataforma.</li></ul></section></main>`;
+      <ul class="fm-ul"><li><b>Obrigatórias:</b> código da pessoa e código do processo.</li><li><b>Recomendadas:</b> UF, código IBGE do município (7 dígitos), região, gênero, setor, instituição e se representa uma CIEA.</li><li><b>Aba de processos (opcional):</b> código, sigla, descrição, início, fim, turmas, carga horária por turma e total, modalidade.</li><li><b>Para encontrar pessoas:</b> nome, e-mail, telefone, turma, se concluiu e a carga horária cursada.</li><li>Nomes e contatos ficam numa área à parte, que só perfis de edição enxergam. Perfis de leitura veem só os números.</li></ul></section></main>`;
   }
   const { resumo, dif } = montar(S);
   const sel = (grupo, k, cols, atual) => `<select data-fm-col="${grupo}:${k}" aria-label="Coluna para ${k}"><option value="">— não usar —</option>${cols.map((c) => `<option value="${e(c)}"${c === atual ? ' selected' : ''}>${e(c)}</option>`).join('')}</select>`;
@@ -634,7 +785,7 @@ export async function pagFormacoesAtualizar(S) {
     <form class="card fm-bx fm-pub" data-form="fm-publicar">
       <div class="f" style="flex:1 1 400px"><label for="fm-nota">Nota da atualização <span class="muted" style="font-weight:400">(aparece no histórico)</span></label><input id="fm-nota" name="nota" type="text" maxlength="300" placeholder="Ex.: Inclui a turma 5 do MonitoraEA_CIEAS"></div>
       <div style="display:flex;gap:10px;align-items:flex-end"><button type="button" class="btn" data-acao="fm-cancelar">Cancelar</button><button class="btn pri" type="submit"${falta ? ' disabled' : ''}>Publicar atualização</button></div>
-      <p class="xs muted" style="flex-basis:100%">${falta ? 'Para publicar, indique as colunas do código da pessoa e do código do processo.' : 'A versão anterior fica guardada e pode ser restaurada. Itens do Quadro ligados aos processos ganham um registro no histórico. Nomes, e-mails e telefones não são gravados.'}</p>
+      <p class="xs muted" style="flex-basis:100%">${falta ? 'Para publicar, indique as colunas do código da pessoa e do código do processo.' : 'A versão anterior fica guardada e pode ser restaurada. Itens do Quadro ligados aos processos ganham um registro no histórico. Nomes e contatos ficam visíveis só para perfis de edição.'}</p>
     </form></main>`;
 }
 
@@ -663,6 +814,23 @@ export const acoes = {
     return { foco: 'fp-turmas-' + el.dataset.cod };
   },
   async 'fm-fechar'(S) { S.fmEditar = null; return {}; },
+  async 'fm-peditar'(S, el) { S.fmPessoa = el.dataset.cod; return { foco: 'pc-n' }; },
+  async 'fm-pfechar'(S) { S.fmPessoa = null; return {}; },
+  async 'fm-pmais'(S) { S.filtros.plim = (S.filtros.plim || 50) + 50; return {}; },
+  async 'fm-plimpar'(S) { Object.assign(S.filtros, { pq: '', pproc: 'todos', puf: '', psit: 'todas', plim: 50 }); return {}; },
+  async 'fm-pcsv'(S) {
+    const { csv } = listaCSV(S);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `pessoas-formacoes-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    return { semRender: true, aviso: 'Lista baixada. Ela traz dados pessoais: guarde e compartilhe com cuidado.' };
+  },
+  async 'fm-pcopiar'(S) {
+    const { emails } = listaCSV(S);
+    try { await navigator.clipboard.writeText(emails.join('; ')); } catch { throw new Error('O navegador não deixou copiar. Use Baixar lista (CSV).'); }
+    return { semRender: true, aviso: `${emails.length} ${emails.length === 1 ? 'e-mail copiado' : 'e-mails copiados'}. Cole no campo Cco (cópia oculta) da mensagem.` };
+  },
   async 'fm-ir-qualidade'() {
     const h = document.getElementById('t-q');
     h?.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -677,8 +845,8 @@ export const acoes = {
   },
   async 'fm-cancelar'(S) { S.fimp = null; location.hash = '#/formacoes'; return {}; },
   async 'fm-modelo'() {
-    const cab = ['codigo', 'cod_formacao', 'UF', 'cod_mun', 'Região', 'Gênero', 'Setor', 'Instituição', 'Representando CIEA', 'email'];
-    const ex = ['30001', '20004', 'SP', '3550308', 'SUDESTE', 'F', 'GOVERNO', 'Secretaria Municipal de Meio Ambiente', 'SIM', 'pessoa@exemplo.org'];
+    const cab = ['codigo', 'Nome', 'email', 'Telefone', 'cod_formacao', 'Turma', 'Situação', 'Carga horária cursada', 'UF', 'cod_mun', 'Região', 'Gênero', 'Setor', 'Instituição', 'Representando CIEA'];
+    const ex = ['30001', 'Nome da Pessoa', 'pessoa@exemplo.org', '(11) 90000-0000', '20004', '5', 'Concluiu', '16', 'SP', '3550308', 'SUDESTE', 'F', 'GOVERNO', 'Secretaria Municipal de Meio Ambiente', 'SIM'];
     const proc = ['cod_formacao;sigla;descricao;inicio;fim;turmas;carga_horaria_turma;carga_horaria_total;modalidade', '20004;MonitoraEA_CIEAS;Capacidade adaptativa em perspectiva policêntrica;02/2023;12/2026;5;16;80;Híbrido'];
     const csv = '﻿' + [cab.join(';'), ex.join(';')].join('\n');
     const baixar = (nome, conteudo) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([conteudo], { type: 'text/csv;charset=utf-8' })); a.download = nome; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
@@ -688,6 +856,15 @@ export const acoes = {
   },
 };
 export const formularios = {
+  async 'fm-pbusca'(S, fd) { S.filtros.pq = String(fd.get('q') || '').trim(); S.filtros.plim = 50; return { foco: 'pq' }; },
+  async 'fm-contato'(S, fd, form) {
+    const cod = form.dataset.cod;
+    const nome = String(fd.get('nome') || '').trim(), email = String(fd.get('email') || '').trim(), tel = String(fd.get('telefone') || '').trim();
+    if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Esse e-mail parece incompleto.');
+    await S.api.formacaoContato(cod, nome, email, tel);
+    S.form = null; S.fmPessoa = null;
+    return { recarregar: true, aviso: nome || email || tel ? 'Contato salvo.' : 'Nome e contatos apagados.' };
+  },
   async 'fm-busca'(S, fd) { S.filtros.fq = String(fd.get('q') || '').trim(); return {}; },
   async 'fm-proc'(S, fd, form) {
     const cod = form.dataset.cod;
@@ -730,10 +907,10 @@ export const formularios = {
   },
   async 'fm-publicar'(S, fd) {
     if (!S.fimp) throw new Error('Envie a planilha primeiro.');
-    const { dados, resumo } = montar(S);
+    const { dados, resumo, contatos } = montar(S);
     if (!dados.participacoes.length) throw new Error('Nenhuma participação reconhecida. Confira as colunas obrigatórias.');
     const { lista, ...gravar } = resumo;
-    await S.api.formacaoPublicar(dados, S.fimp.arquivo, String(fd.get('nota') || '').trim(), gravar);
+    await S.api.formacaoPublicar(dados, S.fimp.arquivo, String(fd.get('nota') || '').trim(), gravar, contatos);
     S.fimp = null; S.form = null;
     location.hash = '#/formacoes';
     return { recarregar: true, aviso: `Dados publicados: ${fmt(resumo.participacoes)} participações de ${fmt(resumo.pessoas)} pessoas.` };

@@ -1,10 +1,10 @@
 // Inicialização, rotas e despacho de ações.
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261108b';
-import { criarBackendDemo } from './dados-demo.js?v=20261108b';
-import * as P from './paginas.js?v=20261108b';
-import { pagSintese } from './sintese.js?v=20261108b';
-import * as F from './formacoes.js?v=20261108b';
-import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261108b';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=20261109a';
+import { criarBackendDemo } from './dados-demo.js?v=20261109a';
+import * as P from './paginas.js?v=20261109a';
+import { pagSintese } from './sintese.js?v=20261109a';
+import * as F from './formacoes.js?v=20261109a';
+import { e, tipoDeMime, duracaoFmt, podeGithub } from './util.js?v=20261109a';
 
 Object.assign(P.acoes, F.acoes);
 Object.assign(P.formularios, F.formularios);
@@ -13,7 +13,8 @@ const raiz = document.getElementById('app');
 const S = {
   api: null, eu: null, d: null, notif: [],
   rota: '', params: {}, filtros: { frente: 'todas', origem: 'todas', q: '', triagem: 'recebidas', equipe: 'todas', notif: 'todas', github: 'avaliar', sintese: '30',
-    fproc: 'todos', fregiao: 'todas', fsetor: 'todos', fciea: 'todos', fuf: '', fq: '', fmapa: 'uf', fmed: 'part' },
+    fproc: 'todos', fregiao: 'todas', fsetor: 'todos', fciea: 'todos', fuf: '', fq: '', fmapa: 'uf', fmed: 'part',
+    pq: '', pproc: 'todos', puf: '', psit: 'todas', plim: 50 },
   form: null,        // dados de formação carregados
   fimp: null,        // planilha de formação em conferência
   abaAcesso: 'entrar', ultimoConvite: null,
@@ -42,7 +43,7 @@ function lerRota() {
   const rota = partes[0] || 'sintese';
   const params = {};
   if (rota === 'item') { params.id = partes[1]; params.atribuir = partes[2] === 'atribuir'; }
-  if (rota === 'formacoes' && partes[1] === 'atualizar') params.sub = 'atualizar';
+  if (rota === 'formacoes' && ['atualizar', 'pessoas'].includes(partes[1])) params.sub = partes[1];
   return { rota, params };
 }
 
@@ -94,7 +95,7 @@ async function render(opcoes = {}) {
     const mudouRota = rota !== S.rota || params.id !== S.params.id || params.sub !== S.params.sub;
     if (mudouRota) S.linkAberto = null;
     // ao entrar em Formações, busca a versão mais recente dos dados
-    if (mudouRota && rota === 'formacoes' && !params.sub && S.rota !== 'formacoes') S.form = null;
+    if (mudouRota && rota === 'formacoes' && S.rota !== 'formacoes') S.form = null;
     S.rota = rota; S.params = params;
     const paginas = {
       painel: () => P.pagPainel(S),
@@ -106,7 +107,12 @@ async function render(opcoes = {}) {
       decisoes: () => P.pagDecisoes(S),
       equipe: () => P.pagEquipe(S),
       notificacoes: () => P.pagNotificacoes(S),
-      formacoes: () => (params.sub === 'atualizar' ? F.pagFormacoesAtualizar(S) : F.pagFormacoes(S)),
+      formacoes: () => (!S.d.formacoesAtivo
+        ? `<main class="page"><div class="ph"><div class="txt"><h1>Formações</h1></div></div><section class="card" style="padding:28px 24px;max-width:760px">
+            <h2 style="font-size:17px">Falta um passo no banco de dados</h2>
+            <p class="sub" style="margin:8px 0 14px">A página Formações já está no site, mas o banco ainda não tem as tabelas dela. Quem administra o Supabase precisa abrir o <b>SQL Editor</b>, colar o arquivo <b>formacoes.sql</b> e clicar em <b>Run</b>. Esse arquivo só acrescenta tabelas e não apaga nada.</p>
+            <p class="xs muted">Depois disso, recarregue esta página.</p></section></main>`
+        : (params.sub === 'atualizar' ? F.pagFormacoesAtualizar(S) : params.sub === 'pessoas' ? F.pagFormacoesPessoas(S) : F.pagFormacoes(S))),
       github: () => (S.d.githubAtivo && podeGithub(S.eu) ? P.pagGithub(S) : pagSintese(S)),
     };
     const titulos = { painel: 'Painel', sintese: 'Síntese', quadro: 'Quadro', triagem: 'Triagem', item: 'Item', novo: 'Novo registro', decisoes: 'Decisões', equipe: 'Equipe', notificacoes: 'Avisos', github: 'GitHub', formacoes: 'Formações' };
@@ -283,7 +289,7 @@ window.addEventListener('beforeunload', (ev) => {
 async function iniciar() {
   try {
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261108b');
+      const { criarBackendSupabase } = await import('./dados-supabase.js?v=20261109a');
       S.api = criarBackendSupabase(SUPABASE_URL, SUPABASE_ANON_KEY);
     } else {
       S.api = criarBackendDemo();

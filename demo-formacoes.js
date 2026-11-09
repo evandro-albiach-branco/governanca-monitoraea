@@ -76,7 +76,42 @@ export function participacoesDemo() {
       });
     }
   }
+  // turma e situação vêm de um segundo sorteio, para não mudar os números acima
+  const r2 = sorteio(7);
+  for (const l of linhas) {
+    const p = PROCESSOS_DEMO.find((x) => x.cod === l.cod_processo);
+    const t = 1 + Math.floor(r2() * (p.turmas || 1));
+    l.turma = String(t);
+    if (l.cod_processo === '20004' && t === 5) l.situacao = 'cursando';
+    else l.situacao = r2() < 0.86 || l.papel === 'formador' ? 'concluiu' : 'nao_concluiu';
+    if (l.situacao === 'concluiu' && p.carga_turma) l.carga = p.carga_turma;
+  }
   return linhas;
+}
+
+// Nomes e contatos FICTÍCIOS para a demonstração (domínio exemplo.org, telefones 0000)
+const PRENOMES = ['Ana', 'Beatriz', 'Carla', 'Daniela', 'Eduarda', 'Fernanda', 'Gabriela', 'Helena', 'Isabela', 'Juliana', 'Larissa', 'Mariana', 'Natália', 'Patrícia', 'Renata', 'Sabrina', 'Tatiana', 'Vanessa',
+  'André', 'Bruno', 'Carlos', 'Diego', 'Felipe', 'Gustavo', 'Henrique', 'Igor', 'João', 'Lucas', 'Marcelo', 'Paulo', 'Rafael', 'Thiago'];
+const SOBRENOMES = ['Almeida', 'Barbosa', 'Cardoso', 'Costa', 'Dias', 'Ferreira', 'Gomes', 'Lima', 'Martins', 'Melo', 'Moreira', 'Nascimento', 'Oliveira', 'Pereira', 'Ribeiro', 'Rocha', 'Santos', 'Silva', 'Souza', 'Teixeira', 'Vieira'];
+const DDD = { SP: 11, RJ: 21, ES: 27, MG: 31, PR: 41, SC: 48, RS: 51, DF: 61, GO: 62, TO: 63, MT: 65, MS: 67, AC: 68, RO: 69, BA: 71, SE: 79, PE: 81, AL: 82, PB: 83, RN: 84, CE: 85, PI: 86, MA: 98, PA: 91, AM: 92, RR: 95, AP: 96 };
+export function contatosDemo(participacoes) {
+  const r = sorteio(11);
+  const vistos = new Map();
+  for (const l of participacoes) {
+    if (vistos.has(l.cod_pessoa)) continue;
+    const fem = l.genero === 'F';
+    const pre = PRENOMES[(fem ? 0 : 18) + Math.floor(r() * (fem ? 18 : 14))];
+    const s1 = SOBRENOMES[Math.floor(r() * SOBRENOMES.length)];
+    const s2 = SOBRENOMES[Math.floor(r() * SOBRENOMES.length)];
+    const sem = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    vistos.set(l.cod_pessoa, {
+      cod_pessoa: l.cod_pessoa,
+      nome: `${pre} ${s1}${s2 !== s1 ? ' ' + s2 : ''}`,
+      email: r() < 0.03 ? null : `${sem(pre)}.${sem(s2)}${l.cod_pessoa.slice(-2)}@exemplo.org`,
+      telefone: r() < 0.25 ? null : `(${DDD[l.uf] || 61}) 90000-${l.cod_pessoa.slice(-4)}`,
+    });
+  }
+  return [...vistos.values()];
 }
 
 export function versaoDemo(agoraMenos) {

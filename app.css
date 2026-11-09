@@ -567,3 +567,20 @@ textarea { padding: 10px 12px; resize: vertical; }
   .fm-g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .fm-hist { display: none; }
 }
+
+/* Formações · encontrar pessoas */
+.fm-pres { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.fm-pres b { color: var(--ink); font-weight: 600; }
+.fm-ptb td { vertical-align: top; }
+.fm-pnome { font-weight: 600; font-size: 13.5px; }
+.fm-chips { display: flex; flex-wrap: wrap; gap: 6px; max-width: 460px; }
+.fm-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; border-radius: 8px; padding: 3px 8px; border: 1px solid var(--line); background: #fff; white-space: nowrap; }
+.fm-chip b { font-weight: 600; }
+.fm-chip i { font-style: normal; font-weight: 600; font-size: 11px; }
+.fm-chip em { font-style: normal; color: var(--muted); font-size: 11.5px; }
+.fm-chip.ok { border-color: #BFE0CB; background: #F2FAF5; } .fm-chip.ok i { color: #1E7A43; }
+.fm-chip.nao { border-color: #F1C4C4; background: #FFF6F6; } .fm-chip.nao i { color: #B42323; }
+.fm-chip.cur { border-color: #C9DCF2; background: #F3F8FE; } .fm-chip.cur i { color: #0B3570; }
+.fm-ctt { font-size: 12.5px; min-width: 200px; word-break: break-word; }
+.fm-ctt a { color: var(--blue); }
+@media (max-width: 640px) { .fm-pres span:last-child { margin-left: 0 !important; } }

@@ -11,10 +11,10 @@
 -- dados entram aqui como uma nova VERSÃO. A página Formações mostra sempre
 -- a versão mais recente, e as anteriores ficam guardadas para restaurar.
 --
--- Privacidade: o banco guarda só códigos e atributos agregáveis (UF,
--- município, região, gênero, setor, instituição, CIEA). Nomes, e-mails e
--- telefones da planilha nunca são gravados: a função de publicação
--- descarta qualquer outro campo.
+-- Privacidade: as versões guardam só códigos e atributos agregáveis (UF,
+-- município, região, gênero, setor, instituição, CIEA, situação, turma,
+-- carga). Nomes, e-mails e telefones ficam à parte, na tabela
+-- formacao_contatos, que só perfis de edição enxergam (leitores, não).
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
@@ -51,6 +51,22 @@ create policy ver on public.formacao_processos for select to authenticated using
 revoke all on public.formacao_processos from anon;
 grant select on public.formacao_processos to authenticated;
 
+-- Nomes e contatos das pessoas que passaram pelas formações.
+-- Separados das versões para que só perfis de edição os vejam.
+create table if not exists public.formacao_contatos (
+  cod_pessoa      text primary key,
+  nome            text,
+  email           text,
+  telefone        text,
+  atualizado_por  uuid references public.membros(id) on delete set null,
+  atualizado_em   timestamptz not null default now()
+);
+alter table public.formacao_contatos enable row level security;
+drop policy if exists ver on public.formacao_contatos;
+create policy ver on public.formacao_contatos for select to authenticated using (public.posso_editar());
+revoke all on public.formacao_contatos from anon;
+grant select on public.formacao_contatos to authenticated;
+
 -- Quem pode atualizar e corrigir os dados de formação: qualquer pessoa
 -- da plataforma que não tenha perfil só de leitura
 create or replace function public.posso_formacao() returns boolean
@@ -73,7 +89,10 @@ language sql immutable set search_path = public as $$
     'genero',       case when upper(x->>'genero') in ('F','M') then upper(x->>'genero') end,
     'setor',        left(nullif(x->>'setor', ''), 60),
     'instituicao',  left(nullif(x->>'instituicao', ''), 160),
-    'ciea',         case when jsonb_typeof(x->'ciea') = 'boolean' then x->'ciea' end
+    'ciea',         case when jsonb_typeof(x->'ciea') = 'boolean' then x->'ciea' end,
+    'situacao',     case when x->>'situacao' in ('concluiu','nao_concluiu','cursando') then x->>'situacao' end,
+    'turma',        left(nullif(x->>'turma', ''), 20),
+    'carga',        case when jsonb_typeof(x->'carga') = 'number' and (x->>'carga')::numeric between 0 and 10000 then x->'carga' end
   ))), '[]'::jsonb)
   from jsonb_array_elements(coalesce(p, '[]'::jsonb)) x
 $$;
@@ -101,7 +120,8 @@ revoke execute on function public.formacao_limpar_processos(jsonb) from public, 
 --   p_dados:   {"processos":[...], "participacoes":[...]}
 --   p_resumo:  contagens e pendências calculadas na conferência
 -- ---------------------------------------------------------------------
-create or replace function public.formacao_publicar(p_dados jsonb, p_arquivo text, p_nota text, p_resumo jsonb default '{}'::jsonb)
+drop function if exists public.formacao_publicar(jsonb, text, text, jsonb);
+create or replace function public.formacao_publicar(p_dados jsonb, p_arquivo text, p_nota text, p_resumo jsonb default '{}'::jsonb, p_contatos jsonb default null)
 returns bigint
 language plpgsql security definer set search_path = public as $$
 declare v_id bigint; v_proc jsonb; v_part jsonb; r record;
@@ -125,6 +145,19 @@ begin
           jsonb_build_object('processos', v_proc, 'participacoes', v_part),
           coalesce(p_resumo, '{}'::jsonb))
   returning id into v_id;
+  -- nomes e contatos: atualiza quem veio na planilha, sem apagar o que não veio
+  if jsonb_typeof(p_contatos) = 'array' then
+    insert into formacao_contatos (cod_pessoa, nome, email, telefone, atualizado_por, atualizado_em)
+    select distinct on (left(c->>'cod_pessoa', 40)) left(c->>'cod_pessoa', 40), left(nullif(trim(c->>'nome'), ''), 200),
+           lower(left(nullif(trim(c->>'email'), ''), 200)), left(nullif(trim(c->>'telefone'), ''), 60), auth.uid(), now()
+      from jsonb_array_elements(p_contatos) c
+     where nullif(c->>'cod_pessoa', '') is not null
+    on conflict (cod_pessoa) do update set
+      nome = coalesce(excluded.nome, formacao_contatos.nome),
+      email = coalesce(excluded.email, formacao_contatos.email),
+      telefone = coalesce(excluded.telefone, formacao_contatos.telefone),
+      atualizado_por = excluded.atualizado_por, atualizado_em = now();
+  end if;
   -- registra no histórico dos itens do Quadro ligados a cada processo
   for r in
     select fp.item_id, fp.cod, count(*) as n
@@ -140,8 +173,8 @@ begin
   end loop;
   return v_id;
 end $$;
-revoke execute on function public.formacao_publicar(jsonb, text, text, jsonb) from public, anon;
-grant execute on function public.formacao_publicar(jsonb, text, text, jsonb) to authenticated;
+revoke execute on function public.formacao_publicar(jsonb, text, text, jsonb, jsonb) from public, anon;
+grant execute on function public.formacao_publicar(jsonb, text, text, jsonb, jsonb) to authenticated;
 
 -- Restaurar uma versão anterior (vira a versão mais recente)
 create or replace function public.formacao_restaurar(p_versao bigint) returns bigint
@@ -237,3 +270,26 @@ begin
 end $$;
 revoke execute on function public.formacao_processo_corrigir(text, jsonb, text, jsonb) from public, anon;
 grant execute on function public.formacao_processo_corrigir(text, jsonb, text, jsonb) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Corrigir o nome ou os contatos de uma pessoa (tudo vazio apaga o registro)
+-- ---------------------------------------------------------------------
+create or replace function public.formacao_contato_salvar(p_cod text, p_nome text, p_email text, p_telefone text)
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not posso_formacao() then
+    raise exception 'SEM_PERMISSAO: seu perfil é só de leitura e não atualiza as formações';
+  end if;
+  if nullif(trim(p_cod), '') is null then raise exception 'FORMACAO_DADOS: pessoa sem código'; end if;
+  if nullif(trim(p_nome), '') is null and nullif(trim(p_email), '') is null and nullif(trim(p_telefone), '') is null then
+    delete from formacao_contatos where cod_pessoa = trim(p_cod);
+    return;
+  end if;
+  insert into formacao_contatos (cod_pessoa, nome, email, telefone, atualizado_por, atualizado_em)
+  values (trim(p_cod), left(nullif(trim(p_nome), ''), 200), lower(left(nullif(trim(p_email), ''), 200)), left(nullif(trim(p_telefone), ''), 60), auth.uid(), now())
+  on conflict (cod_pessoa) do update set nome = excluded.nome, email = excluded.email, telefone = excluded.telefone,
+    atualizado_por = excluded.atualizado_por, atualizado_em = now();
+end $$;
+revoke execute on function public.formacao_contato_salvar(text, text, text, text) from public, anon;
+grant execute on function public.formacao_contato_salvar(text, text, text, text) to authenticated;
